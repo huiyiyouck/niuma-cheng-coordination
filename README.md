@@ -29,10 +29,11 @@ xiaobao (调用方)  ──HTTP──▶  ai (服务方)
 | 路径 | 作用 |
 |------|------|
 | [PROJECTS.md](PROJECTS.md) | 项目目录：仓库、职责、当前入口、关联沟通文档 |
+| [REQUESTS.md](REQUESTS.md) | 跨项目需求提报中心（需求池）：提报时不指定承接方，由项目方认领或 Owner 指派 |
 | [STATUS.md](STATUS.md) | 跨项目当前状态：谁等谁、阻塞项、下一步 |
 | [CHANGELOG.md](CHANGELOG.md) | 跨项目重大事件、契约 breaking change、迁移提醒 |
 | `contracts/` | 跨项目契约单一真源（HTTP schema、字段语义） |
-| `communications/` | 项目间沟通文档，按参与项目命名 |
+| `communications/` | 承接需求**之后**的项目间协作与联调沟通，按参与项目命名 |
 | `decisions/` | 影响两个以上项目的决策记录 |
 
 ## 协作约定（摘要）

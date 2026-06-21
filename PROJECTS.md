@@ -25,6 +25,6 @@
 | 技术栈 | Python + FastAPI + LangGraph |
 | 仓库 | 待 Owner 配置 git remote（当前仅本地 `~/Project/niuma-cheng-ai`，initial commit `0ee6c9a`） |
 | 职责边界 | L1 新闻处理：四维评分（`score`+`reason`）、标签、摘要、翻译、按需工具调用（KB 检索 / 链接读取 / Web 搜索）；**不**做评分加权 `score_total`（留在 xiaobao） |
-| 当前入口 | 项目仓库（**尚未 Bootstrap 团队工作流**，无 `docs/progress/INDEX.md`） |
+| 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入团队工作流**，工作台已初始化，未进入角色工作；当前迭代：无） |
 | 关联项目 | `xiaobao`（服务方 ← 调用方） |
 | 沟通文档 | [communications/xiaobao__ai.md](communications/xiaobao__ai.md) |

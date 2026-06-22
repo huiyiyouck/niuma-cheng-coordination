@@ -10,7 +10,7 @@
 | 项目 | 阶段 | 当前入口 | 备注 |
 |------|------|----------|------|
 | `xiaobao` | v0.6 标准迭代，实现阶段联调精修，Developer 侧已收口 | 项目 `docs/progress/INDEX.md` | 等待 Owner 报具体 bug |
-| `ai` | 仓库骨架可运行（冒烟 2 passed），**已接入团队工作流**（已 Bootstrap，工作台已初始化，未进入角色工作） | 项目 `docs/progress/INDEX.md` | 无 git remote；各节点真实逻辑仍为占位 |
+| `ai` | 仓库骨架可运行（冒烟 2 passed），**已接入团队工作流**（已 Bootstrap，工作台已初始化，未进入角色工作） | 项目 `docs/progress/INDEX.md` | git remote 已配置并推送 `main`；各节点真实逻辑仍为占位 |
 
 ## 跨项目阻塞与谁等谁
 
@@ -19,7 +19,7 @@
 
 - 状态：已完成（2026-06-21）—— `ai` 已同步工作流框架（`agent-workflow@90edee2`）并执行 Bootstrap，建 `docs/progress/`（INDEX/iterations/ad-hoc/archive/roles）、填 `project-context.md`（含 `coordination_root`）。
 - 谁等谁：无。
-- 剩余：Owner 仍需为 `ai` 配置 git remote（与本项不互相阻塞）。
+- 剩余：无。`ai` 已配置 git remote（`git@github.com:huiyiyouck/niuma-cheng-ai.git`）并推送 `main`。
 - 依据：各项目 `docs/baseline/cross-project-collaboration.md` §新项目复用团队工作流。
 
 <a name="news-l1-contract"></a>
@@ -32,6 +32,6 @@
 
 ## 下一步汇总
 
-1. Owner：为 `niuma-cheng-ai` 配置 GitHub remote（配好后由 ai 会话在 `PROJECTS.md` 回填仓库地址）。
+1. ~~Owner：为 `niuma-cheng-ai` 配置 GitHub remote~~ —— 已完成（2026-06-21），`PROJECTS.md` 仓库地址已回填。
 2. ai 项目会话：按 INDEX 下一步入口，询问 Owner 是否以某角色 / 工作类型继续；否则保持 General。
 3. 任一侧改 news-l1 契约：先改 `contracts/news-l1.md`，CHANGELOG 记一行。

@@ -23,7 +23,7 @@
 | 项目 id | `ai` |
 | 名称 | AI 处理中枢 / Agent Hub |
 | 技术栈 | Python + FastAPI + LangGraph |
-| 仓库 | 待 Owner 配置 git remote（当前仅本地 `~/Project/niuma-cheng-ai`，initial commit `0ee6c9a`） |
+| 仓库 | `git@github.com:huiyiyouck/niuma-cheng-ai.git`（本地 `~/Project/niuma-cheng-ai`） |
 | 职责边界 | L1 新闻处理：四维评分（`score`+`reason`）、标签、摘要、翻译、按需工具调用（KB 检索 / 链接读取 / Web 搜索）；**不**做评分加权 `score_total`（留在 xiaobao） |
 | 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入团队工作流**，工作台已初始化，未进入角色工作；当前迭代：无） |
 | 关联项目 | `xiaobao`（服务方 ← 调用方） |

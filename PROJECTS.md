@@ -28,3 +28,16 @@
 | 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入团队工作流**，工作台已初始化，未进入角色工作；当前迭代：无） |
 | 关联项目 | `xiaobao`（服务方 ← 调用方） |
 | 沟通文档 | [communications/xiaobao__ai.md](communications/xiaobao__ai.md) |
+
+## agent-workflow — 团队工作流真源
+
+| 字段 | 内容 |
+|------|------|
+| 项目 id | `agent-workflow` |
+| 名称 | AI 助手团队工作流真源 |
+| 技术栈 | Markdown + shell scripts |
+| 仓库 | `git@github.com:huiyiyouck/agent-workflow.git`（本地 `~/Project/agent-workflow`） |
+| 职责边界 | 工作流入口、baseline、templates、安装/同步脚本的单一真源；**只承接基线修正提案（BCR）**，不承接业务功能 / 接口契约 |
+| 当前入口 | 真源仓库 `docs/ROADMAP.md`（P8 基线修正提案走 coordination 管理，自举中） |
+| 关联项目 | `xiaobao`、`ai` 等已接入 agent-workflow 的业务项目 |
+| 沟通文档 | 无固定 communications；基线修正提案见 [REQUESTS.md#基线修正提案池](REQUESTS.md#基线修正提案池) |

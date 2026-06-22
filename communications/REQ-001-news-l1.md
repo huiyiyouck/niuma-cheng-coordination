@@ -1,7 +1,8 @@
-# xiaobao ↔ ai 协作沟通
+# REQ-001 · news-l1 跨项目协作沟通
 
 - 参与项目：`xiaobao`, `ai`
-- 定位：`xiaobao` 与 `ai` **承接需求之后**的协作与联调沟通（需求源头见 [../REQUESTS.md](../REQUESTS.md)）
+- 相关需求：REQ-001（状态见 [../REQUESTS.md](../REQUESTS.md)）
+- 定位：REQ-001 被承接之后的协作与联调沟通
 - 契约真源：[../contracts/news-l1.md](../contracts/news-l1.md)（涉及接口/字段时以此为准）
 - 当前状态入口：[../STATUS.md#news-l1-contract](../STATUS.md)
 - 最近更新：2026-06-22
@@ -47,6 +48,6 @@
 
 | 事项 | 归属 | 状态 |
 |------|------|------|
-| ai 配置 git remote 并 Bootstrap 团队工作流 | Owner / ai 会话 | 待启动（见 [../STATUS.md#ai-bootstrap](../STATUS.md)） |
+| ai 配置 git remote 并 Bootstrap 团队工作流 | Owner / ai 会话 | 已完成（2026-06-21，见 [../STATUS.md#ai-bootstrap](../STATUS.md)） |
 | REQ-001 承接留痕补登 | ai PM/Architect | 已完成（2026-06-22，ai PM ck 承接） |
 | REQ-001 news-l1 小批量观察 | xiaobao Developer | 进行中 |

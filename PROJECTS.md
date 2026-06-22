@@ -39,5 +39,18 @@
 | 仓库 | `git@github.com:huiyiyouck/agent-workflow.git`（本地 `~/Project/agent-workflow`） |
 | 职责边界 | 工作流入口、baseline、templates、安装/同步脚本的单一真源；**只承接基线修正提案（BCR）**，不承接业务功能 / 接口契约 |
 | 当前入口 | 真源仓库 `docs/ROADMAP.md`（P8 基线修正提案走 coordination 管理，自举中） |
-| 关联项目 | `xiaobao`、`ai` 等已接入 agent-workflow 的业务项目 |
+| 关联项目 | `xiaobao`、`ai`、`workboard` 等已接入 agent-workflow 的项目 |
 | 沟通文档 | 无固定 communications；基线修正提案见 [REQUESTS.md#基线修正提案池](REQUESTS.md#基线修正提案池) |
+
+## workboard — 跨项目 Agent 工作看板
+
+| 字段 | 内容 |
+|------|------|
+| 项目 id | `workboard` |
+| 名称 | 跨项目 Agent 工作看板 |
+| 技术栈 | 本地 Node + 静态前端 |
+| 仓库 | `git@github.com:huiyiyouck/niuma-cheng-workboard.git`（本地 `~/Project/niuma-cheng-workboard`） |
+| 职责边界 | 只读聚合各项目团队工作流状态、接入诊断、跨项目需求与阻塞；**不回写**被监控项目 |
+| 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入 agent-workflow @1b01fba**，待开发第一版 MVP） |
+| 关联项目 | `xiaobao` / `ai` / `coordination` 等（只读聚合对象） |
+| 沟通文档 | 无（按需求承接后建 `communications/{REQ-id}-{短名}.md`） |

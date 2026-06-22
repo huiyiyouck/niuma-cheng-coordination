@@ -10,7 +10,7 @@
 
 | 需求 id | 提出方 | 内容 | 承接方 | 转入迭代 | 状态 | 沟通文档 |
 |---------|--------|------|--------|----------|------|----------|
-| REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai（承接人待 Bootstrap 后补登 PM/Architect） | ai 待立项 | 联调中 | [communications/xiaobao__ai.md](communications/xiaobao__ai.md) |
+| REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（待启动） | 联调中 | [communications/xiaobao__ai.md](communications/xiaobao__ai.md) |
 
 ---
 
@@ -19,8 +19,8 @@
 - 提出方：xiaobao · Developer
 - 内容：把 L1 推理从新闻平台主进程解耦，由独立服务承载 —— 产出四维**原始**评分（`score`+`reason`）、五类标签、摘要、翻译、按需工具调用（KB 检索 / 链接读取 / Web 搜索）
 - 边界：承接方只产原始评分，加权 `score_total` 留 xiaobao
-- 承接方：`ai`（AI 处理中枢）
-- 承接说明：本需求在跨项目需求流转机制建立**之前**已既成事实推进并跑通；ai 项目 Bootstrap 团队工作流后，由其 PM/Architect 补登正式承接留痕
-- 转入迭代：ai 待立项（ai 尚未 Bootstrap）
+- 承接方：`ai`（AI 处理中枢）· PM（ck）
+- 承接说明：本需求先于跨项目需求流转机制既成事实推进并打通管道；2026-06-22 `ai` 项目完成 Bootstrap 并立项后，由其 PM（ck）评估**正式承接**，补齐「正规提报（xiaobao · Developer）→ 承接（ai · PM）」留痕闭环
+- 转入迭代：ai v0.1 标准迭代（待启动）—— 真实 L1 处理（评分/标签/摘要/翻译由 stub 转真实）规划进 v0.1，迭代门禁下一步启动
 - 当前状态：联调中 —— 契约 [news-l1 v1](contracts/news-l1.md) 定稿，端到端单条已通过，3–5 条小批量观察进行中
 - 联调记录：见 [communications/xiaobao__ai.md](communications/xiaobao__ai.md) B 区

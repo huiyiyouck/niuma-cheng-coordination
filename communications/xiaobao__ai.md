@@ -4,7 +4,7 @@
 - 定位：`xiaobao` 与 `ai` **承接需求之后**的协作与联调沟通（需求源头见 [../REQUESTS.md](../REQUESTS.md)）
 - 契约真源：[../contracts/news-l1.md](../contracts/news-l1.md)（涉及接口/字段时以此为准）
 - 当前状态入口：[../STATUS.md#news-l1-contract](../STATUS.md)
-- 最近更新：2026-06-17
+- 最近更新：2026-06-22
 
 ## 关系概述
 
@@ -27,6 +27,11 @@
 
 > 承接后的接口对接 / 字段对齐 / 调试 / 版本跟进，倒序排列，条目标注所属需求 id。
 
+### 2026-06-22 · [REQ-001] ai PM 正式承接
+
+- `ai` 项目完成 Bootstrap 并立项后，由 PM（ck）评估正式承接 REQ-001，补齐「正规提报（xiaobao · Developer）→ 承接（ai · PM）」留痕闭环。
+- 真实 L1 处理（评分/标签/摘要/翻译由 stub 转真实）规划转入 ai v0.1 标准迭代（待启动，迭代门禁下一步启动）；管道层联调状态不变（仍「联调中」）。
+
 ### 2026-06-17 · [REQ-001] 契约真源迁移
 
 - xiaobao WM 在 coordination 建立 `news-l1` v1 契约真源，取代此前散落在 xiaobao spike 提案中的临时真源。
@@ -43,5 +48,5 @@
 | 事项 | 归属 | 状态 |
 |------|------|------|
 | ai 配置 git remote 并 Bootstrap 团队工作流 | Owner / ai 会话 | 待启动（见 [../STATUS.md#ai-bootstrap](../STATUS.md)） |
-| REQ-001 承接留痕补登 | ai PM/Architect | 待 ai Bootstrap |
+| REQ-001 承接留痕补登 | ai PM/Architect | 已完成（2026-06-22，ai PM ck 承接） |
 | REQ-001 news-l1 小批量观察 | xiaobao Developer | 进行中 |

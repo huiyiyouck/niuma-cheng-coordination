@@ -36,14 +36,14 @@
 
 | BCR id | 提出方 | 摘要 | 影响范围 | 状态 | 真源评估记录 | 真源落地 commit | 回流清单 | 备注 |
 |--------|--------|------|----------|------|--------------|----------------|----------|------|
-| BCR-001 | agent-workflow · General（P8 自举） | 基线修正提案从 Owner 人肉带回改为 coordination BCR 池登记与追踪 | agent-workflow baseline；已接入工作流的下游项目同步规则 | 回流中（已落地真源） | Owner 已评审通过；agent-workflow PR #4 合并 P8 方案（`fe99ac3`） | `fc22e75`（merge 663f59b） | ai: 待 sync；xiaobao: 待 sync；workboard: 不适用（未接入） | 自举样例：先登记 BCR，再改真源 baseline；自举例外仅限本次 P8 |
+| BCR-001 | agent-workflow · General（P8 自举） | 基线修正提案从 Owner 人肉带回改为 coordination BCR 池登记与追踪 | agent-workflow baseline；已接入工作流的下游项目同步规则 | 回流中（已落地真源） | Owner 已评审通过；agent-workflow PR #4 合并 P8 方案（`fe99ac3`） | `fc22e75`（merge 663f59b） | ai: 待 sync；xiaobao: 已回流（`c8c66ce`, 2026-06-22）；workboard: 不适用（未接入） | 自举样例：先登记 BCR，再改真源 baseline；自举例外仅限本次 P8 |
 | BCR-002 | xiaobao（对齐真源时工作区留痕，2026-06-22） | communications 沟通文档命名轴：按项目对（真源现状）vs 按需求一份 | agent-workflow `cross-project-collaboration.md` §communications；回流后影响各下游同名章节 | 已提报 | 待评估 | — | 待评估后定 | 原以 ad-hoc 形式落 agent-workflow progress，按 P8 标准迁入本池，原文件已删 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
 - 目标：把下游 `[基线修正提案]` 从口头带回真源，改为写入 coordination 的 BCR 池，形成有状态、可追溯、可回流的治理流程。
 - 采纳依据：agent-workflow P8 方案已通过 PR #4 合并（`fe99ac3`）。
-- 下一步：真源已落地（`fc22e75`，merge 663f59b，PR #5），待 ai / xiaobao 各自 sync 回流后回填 synced commit，全部完成再置「已回流下游」终态。
+- 下一步：真源已落地（`fc22e75`，merge 663f59b，PR #5），xiaobao 已 sync 回流（`c8c66ce`，2026-06-22）；待 ai sync 回流后，全部完成再置「已回流下游」终态。
 
 ---
 

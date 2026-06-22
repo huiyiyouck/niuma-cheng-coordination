@@ -37,7 +37,7 @@
 | BCR id | 提出方 | 摘要 | 影响范围 | 状态 | 真源评估记录 | 真源落地 commit | 回流清单 | 备注 |
 |--------|--------|------|----------|------|--------------|----------------|----------|------|
 | BCR-001 | agent-workflow · General（P8 自举） | 基线修正提案从 Owner 人肉带回改为 coordination BCR 池登记与追踪 | agent-workflow baseline；已接入工作流的下游项目同步规则 | 已回流下游 | Owner 已评审通过；agent-workflow PR #4 合并 P8 方案（`fe99ac3`） | `fc22e75`（merge 663f59b） | ai: 已回流（`c8c66ce`, 2026-06-22）；xiaobao: 已回流（`c8c66ce`, 2026-06-22）；workboard: 不适用（未接入） | 自举样例：先登记 BCR，再改真源 baseline；自举例外仅限本次 P8 |
-| BCR-002 | xiaobao（对齐真源时工作区留痕，2026-06-22） | communications 沟通文档命名轴：按项目对 vs 按需求一份 | agent-workflow `cross-project-collaboration.md` §communications；回流后影响各下游同名章节 | 已落地真源 | 已采纳：采用「一份需求一份沟通文档」命名轴 | `b5a29a3`（merge `0a76dca`） | xiaobao: 待回流；ai: 待回流 | 已在 coordination 执行实体迁移：`xiaobao__ai.md` → `REQ-001-news-l1.md` |
+| BCR-002 | xiaobao（对齐真源时工作区留痕，2026-06-22） | communications 沟通文档命名轴：按项目对 vs 按需求一份 | agent-workflow `cross-project-collaboration.md` §communications；回流后影响各下游同名章节 | 已回流下游 | 已采纳：采用「一份需求一份沟通文档」命名轴 | `b5a29a3`（merge `0a76dca`） | ai: 已回流（`1b01fba`, 2026-06-22）；xiaobao: 已回流（`91b442a`, 2026-06-22） | 已在 coordination 执行实体迁移：`xiaobao__ai.md` → `REQ-001-news-l1.md` |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -52,7 +52,7 @@
 - 提出方：xiaobao —— 对齐真源（P7 第 3 步）时，工作区有一处未提交改动把 `communications/` 命名轴从「按项目对」翻成「按需求一份」，覆盖前抢救留痕。
 - 目标：评议是否调整 `cross-project-collaboration.md` §communications 的命名轴。
 - 背景：真源现状为**按项目对** `communications/{a}__{b}.md`（一对项目共用一份，承载该对所有需求）；xiaobao 提案为**按需求** `communications/{REQ-id}-{短名}.md`（一个需求一份）。该改动带的「创建时机 / 职责分工」措辞与真源新版一致，说明是看过真源新思路后有意翻转命名轴，非旧版残留。
-- 评估结论：已采纳，状态推进为「已落地真源」。
+- 评估结论：已采纳；真源已落地；已接入下游均已回流，状态置为「已回流下游」。
 - 真源落地：agent-workflow commit `b5a29a3`（merge `0a76dca`）。
 - coordination 实体迁移：`communications/xiaobao__ai.md` → `communications/REQ-001-news-l1.md`，并同步更新 `REQUESTS.md` / `PROJECTS.md` / `communications/README.md`。
 
@@ -64,4 +64,5 @@
 | 与 REQUESTS.md | 一份多 REQ，靠条目标注区分 | 与需求 id 一一对应，反查直达 |
 | 长期可读性 | 单份越积越长、跨需求混杂 | 需求关闭即归档，边界清晰 |
 
-- 下一步：xiaobao / ai 按真源执行 `sync-downstream.sh` 回流；回流完成后更新本 BCR 回流清单。
+- 回流进展：ai 已回流至 `agent-workflow@1b01fba`（2026-06-22）；xiaobao 已回流至 `agent-workflow@1b01fba`（commit `91b442a`，2026-06-22）。
+- 下一步：已闭环；后续新增下游接入时按当前真源版本安装即可。

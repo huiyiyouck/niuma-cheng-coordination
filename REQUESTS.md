@@ -12,6 +12,7 @@
 | 需求 id | 提出方 | 内容 | 承接方 | 转入迭代 | 状态 | 沟通文档 |
 |---------|--------|------|--------|----------|------|----------|
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（待启动） | 联调中 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
+| REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai（Owner 指派，待 ai 会话承接确认） | — | 已提报 | 承接后建 |
 
 ---
 
@@ -25,6 +26,41 @@
 - 转入迭代：ai v0.1 标准迭代（待启动）—— 真实 L1 处理（评分/标签/摘要/翻译由 stub 转真实）规划进 v0.1，迭代门禁下一步启动
 - 当前状态：联调中 —— 契约 [news-l1 v1](contracts/news-l1.md) 定稿，端到端单条已通过，3–5 条小批量观察进行中
 - 联调记录：见 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md)
+
+---
+
+## REQ-002 · AI 处理架构调研（参考项目借鉴）
+
+- 提出方：xiaobao · Architect
+- 提报日期：2026-06-24
+- 内容：调研两个外部参考项目的 AI 处理架构，为 `ai`（Agent Hub）把 REQ-001 的 L1 从 stub 转真实、以及未来 L0 分层提供设计输入。请 `ai` 项目组在此基础上继续深入调研并形成自己的架构方案。
+- 承接方：`ai`（Owner 指派；正式承接由 ai 会话 PM/Architect 确认后回填本条 + 建沟通文档）
+- 参考项目（本地）：
+  - `Horizon`（`/root/Horizon`，Python + asyncio）—— 重度 LLM，与 Agent Hub 几乎同构，最高借鉴价值
+  - `ai-news-aggregator`（`/root/ai-news-aggregator`，TS/Node）—— 轻度 LLM（纯规则过滤），一面「少用 LLM」的反向参照
+- 关键文件指引：`/root/Horizon/src/ai/{analyzer,enricher,client,prompts}.py`、`/root/Horizon/src/mcp/README.md`、`/root/Horizon/docs/{scoring,horizon-hub-design}.md`；`/root/ai-news-aggregator/src/filters/{ai-related,dedupe}.ts`、`/root/ai-news-aggregator/TECH_SPEC.md`
+
+### xiaobao·Architect 初步提炼的 7 个借鉴点
+
+1. **两段式 LLM pipeline 分离**：Horizon `analyzer`(便宜模型批量打分) + `enricher`(过阈值后才贵处理)，印证 L0/L1 双模型；省钱靠**阈值闸门**而非模型选型。
+2. **「伪 Agent」确定性编排 vs 真 Agent 自主循环**：`enricher` 的「按需工具调用」是写死三步（LLM 列概念 → 代码搜索 → 喂回 grounding），无 ReAct 自主循环。对 LangGraph 选型是关键反问。
+3. **多 provider 客户端 + 链式 fallback**：`client.py`（`ChainedAIClient` 自动降级 + 大量 provider quirk）是整仓最值得移植的文件。
+4. **MCP staged pipeline + 产物落盘可重入**：MCP 层不重实现业务，分阶段 tool + 阶段产物落盘可从中间重入；对 Agent Hub「状态真源」直接有用。
+5. **优雅降级链**：enrich 失败→翻译兜底→不丢条目；analyze 失败→score 0，逐级降级而非丢弃。
+6. **引用校验防幻觉**：`sources` 只保留真实出现在搜索结果里的 URL，过滤 LLM 编造链接。
+7. **确定性预过滤放在 LLM 之前**：aggregator `ai-related.ts` 纯规则做 AI 相关性、`dedupe.ts` 确定性去重；反问 L0 是否必须用 LLM。
+
+### 请 ai 项目组重点回答的 4 个架构岔路口
+
+1. L1 第一版用**确定性 staged 编排**，还是**真 agent 自主工具调用**？（借鉴点 2）
+2. L0 用 **LLM** 还是**规则预过滤 + LLM 兜底**？（借鉴点 7）
+3. LLM 客户端封装：**移植 Horizon `client.py`**（含链式 fallback）还是自研？（借鉴点 3）
+4. L1 子阶段产物是否**落盘可重入**，与现有 `tasks` 表调度如何合流？（借鉴点 4）
+
+### 边界与衔接
+
+- 本条是**调研/预研性质**输入，非契约变更；`news-l1` 契约真源仍以 [contracts/news-l1.md](contracts/news-l1.md) 为准，本调研结论若要改契约须另走契约流程。
+- 与 REQ-001 的关系：REQ-001 是「L1 真实化」的交付需求，REQ-002 是其前置的架构调研；ai 承接后可自行决定二者合并到同一迭代还是分开。
 
 ---
 

@@ -48,9 +48,9 @@
 |------|------|
 | 项目 id | `workboard` |
 | 名称 | 跨项目 Agent 工作看板 |
-| 技术栈 | 本地 Node + 静态前端 |
+| 技术栈 | React 18 + Vite + Tailwind v4 + shadcn（前端，对齐小报）+ 本地 Node 聚合后端（只读 Markdown/config） |
 | 仓库 | `git@github.com:huiyiyouck/niuma-cheng-workboard.git`（本地 `~/Project/niuma-cheng-workboard`） |
 | 职责边界 | 只读聚合各项目团队工作流状态、接入诊断、跨项目需求与阻塞；**不回写**被监控项目 |
-| 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入 agent-workflow @1b01fba**，待开发第一版 MVP） |
+| 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入 agent-workflow @66c1e1a**；**v0.1 已上线** 生产 `workboard.huiyiyou.cloud`；定位仍为只读看板，"管理中枢"为 v0.2 未来方向、未落地） |
 | 关联项目 | `xiaobao` / `ai` / `coordination` 等（只读聚合对象） |
 | 沟通文档 | 无（按需求承接后建 `communications/{REQ-id}-{短名}.md`） |

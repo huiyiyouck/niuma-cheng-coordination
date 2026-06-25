@@ -74,6 +74,8 @@
 |--------|--------|------|----------|------|--------------|----------------|----------|------|
 | BCR-001 | agent-workflow · General（P8 自举） | 基线修正提案从 Owner 人肉带回改为 coordination BCR 池登记与追踪 | agent-workflow baseline；已接入工作流的下游项目同步规则 | 已回流下游 | Owner 已评审通过；agent-workflow PR #4 合并 P8 方案（`fe99ac3`） | `fc22e75`（merge 663f59b） | ai: 已回流（`c8c66ce`, 2026-06-22）；xiaobao: 已回流（`c8c66ce`, 2026-06-22）；workboard: 不适用（未接入） | 自举样例：先登记 BCR，再改真源 baseline；自举例外仅限本次 P8 |
 | BCR-002 | xiaobao（对齐真源时工作区留痕，2026-06-22） | communications 沟通文档命名轴：按项目对 vs 按需求一份 | agent-workflow `cross-project-collaboration.md` §communications；回流后影响各下游同名章节 | 已回流下游 | 已采纳：采用「一份需求一份沟通文档」命名轴 | `b5a29a3`（merge `0a76dca`） | ai: 已回流（`1b01fba`, 2026-06-22）；xiaobao: 已回流（`91b442a`, 2026-06-22） | 已在 coordination 执行实体迁移：`xiaobao__ai.md` → `REQ-001-news-l1.md` |
+| BCR-003 | workboard · PM（2026-06-24） | 项目元信息（定位/名称/技术栈/上线/接入状态）变更后，生态层真源（`PROJECTS.md` / 根 `/root/Project/CLAUDE.md` 索引 / BCR 回流清单接入状态）无同步跟踪机制 | agent-workflow `mechanisms.md` 迭代关闭检查清单 或 `cross-project-collaboration.md` PROJECTS.md 维护约定；下游同步 | 已提报 | 待 Owner + 真源会话评估 | — | — | 触发自 workboard v0.1 定位升级 + 技术栈变更；订正根索引时发现无跟踪机制；本仓 BCR-001 回流清单 workboard「未接入」亦已过期 |
+| BCR-004 | workboard · PM（Owner 要求，2026-06-24） | 删除独立 UI（界面设计师）角色，职责并入 PM | agent-workflow `role-ui.md`（删）、`multi-agent-workflow.md`（角色集/Review 矩阵/UI 阶段）、`runtime.md`（角色路由）、入口 `CLAUDE.md`/`AGENTS.md`（UI 触发/反问）、`standard-iteration-quick.md`（UI 阶段）、模板 `ui-spec.md`；下游各项目 | 已提报 | 待 Owner + 真源会话评估 | — | — | workboard v0.1 已实践 PM 兼 UI（见 v0.1.md 角色说明）；落地由真源评估 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -102,3 +104,40 @@
 
 - 回流进展：ai 已回流至 `agent-workflow@1b01fba`（2026-06-22）；xiaobao 已回流至 `agent-workflow@1b01fba`（commit `91b442a`，2026-06-22）。
 - 下一步：已闭环；后续新增下游接入时按当前真源版本安装即可。
+
+---
+
+## BCR-003 · 生态层项目元信息同步机制缺失
+
+- 提出方：workboard · PM（2026-06-24）
+- 问题：项目在迭代中**定位 / 名称 / 技术栈 / 上线状态 / 工作流接入状态**发生变更后，没有机制保证生态层真源被同步订正，导致以下真源易过期、无人跟踪：
+  - coordination `PROJECTS.md`（项目目录：当前入口、技术栈、状态）
+  - 根 `/root/Project/CLAUDE.md` 生态索引（定位、技术栈、状态、已知不一致）
+  - 本仓 BCR 回流清单中各项目的「接入 / 未接入」状态
+- 实例（本次触发）：
+  - workboard v0.1 定位升级为「项目管理工作台 / 统一管理中枢」、技术栈由「静态 HTML/CSS/JS」改为「React + shadcn」、已上线 `workboard.huiyiyou.cloud`，但根索引仍写「跨项目 Agent 工作看板 / 本地 Node + 静态前端 / 待开发 MVP」。
+  - workboard 已接入 agent-workflow，但 BCR-001 回流清单仍标 workboard「不适用（未接入）」。
+  - 根索引「已知不一致」里 `../claude-workflow` 路径条目已修复但未清理。
+- 拟改方向（供真源评估，非定稿）：
+  - 方案 A：在 `mechanisms.md` 迭代关闭检查清单**新增一项**——「核对本迭代是否变更项目定位 / 名称 / 技术栈 / 上线 / 接入状态；若是，登记同步 coordination `PROJECTS.md` 并提示 Owner 订正根索引」。
+  - 方案 B：在 `cross-project-collaboration.md` 规定「项目元信息变更时由该项目同步 coordination `PROJECTS.md` 对应行」，并明确根 `/root/Project/CLAUDE.md` 的维护责任归属（根目录会话）。
+- 不在下游落地：本提案仅提报，落地由 Owner + agent-workflow 真源会话评估。
+
+---
+
+## BCR-004 · 删除 / 合并 UI（界面设计师）角色到 PM
+
+- 提出方：workboard · PM（Owner 明确要求，2026-06-24）
+- 提案：删除独立的 **UI（界面设计师）角色**，其职责并入 **PM（产品经理）**。
+- 理由：
+  - 一人公司 + AI 出原型（Figma Make / Claude Design）模式下，UI 与 PM 高度重叠；页面结构 / 信息架构本就贴近 PM 的需求与流程定义。
+  - workboard v0.1 已实际以「PM 兼任 UI」跑通整条迭代（UI 方案 + 原型 + 数据规格均 PM 产出），见 `niuma-cheng-workboard/docs/progress/iterations/v0.1.md` 角色说明与 `v0.1-ui.md`。
+- 拟改范围（供真源评估，非定稿）：
+  - `role-ui.md`：删除；核心方法（用户流程映射 / 交互状态枚举 / 视觉约束 / UI 验收）择要并入 `role-pm.md`。
+  - `multi-agent-workflow.md`：角色集移除 UI；Review 矩阵「流程 / 视觉」影响领域改由 PM 承担；标准迭代「UI 方案阶段」并入 PRD 或作为 PM 可选阶段。
+  - `runtime.md`：角色加载路由移除 UI。
+  - 入口 `CLAUDE.md` / `AGENTS.md`：角色切换触发表移除「UI / 界面设计师」精准触发与模糊反问（或将「UI / 界面 / 设计」关键词指向 PM）。
+  - `standard-iteration-quick.md`：流水线 UI 阶段处理。
+  - 模板 `ui-spec.md`：保留为 PM 可选产出，或并入 PRD 模板。
+- 风险提示（供评估）：xiaobao 历史迭代有独立 UI 角色产出与日志（`roles/ui.md`、`vX.Y-ui-spec.md`），删角色后历史产物的归属与后续维护需在真源方案中明确（保留为历史 / 转 PM 名下）。
+- 不在下游落地：本提案仅提报，落地由 Owner + agent-workflow 真源会话评估。

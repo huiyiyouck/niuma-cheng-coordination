@@ -75,8 +75,9 @@
 | BCR-001 | agent-workflow · General（P8 自举） | 基线修正提案从 Owner 人肉带回改为 coordination BCR 池登记与追踪 | agent-workflow baseline；已接入工作流的下游项目同步规则 | 已回流下游 | Owner 已评审通过；agent-workflow PR #4 合并 P8 方案（`fe99ac3`） | `fc22e75`（merge 663f59b） | ai: 已回流（`c8c66ce`, 2026-06-22）；xiaobao: 已回流（`c8c66ce`, 2026-06-22）；workboard: 已回流（接入后随 `66c1e1a` sync，commit `4b8e563`, 2026-06-25） | 自举样例：先登记 BCR，再改真源 baseline；自举例外仅限本次 P8 |
 | BCR-002 | xiaobao（对齐真源时工作区留痕，2026-06-22） | communications 沟通文档命名轴：按项目对 vs 按需求一份 | agent-workflow `cross-project-collaboration.md` §communications；回流后影响各下游同名章节 | 已回流下游 | 已采纳：采用「一份需求一份沟通文档」命名轴 | `b5a29a3`（merge `0a76dca`） | ai: 已回流（`1b01fba`, 2026-06-22）；xiaobao: 已回流（`91b442a`, 2026-06-22） | 已在 coordination 执行实体迁移：`xiaobao__ai.md` → `REQ-001-news-l1.md` |
 | BCR-003 | workboard · PM（2026-06-24） | 项目元信息（定位/名称/技术栈/上线/接入状态）变更后，生态层真源（`PROJECTS.md` / 根 `/root/Project/CLAUDE.md` 索引 / BCR 回流清单接入状态）无同步跟踪机制 | agent-workflow `mechanisms.md` 迭代关闭检查清单 或 `cross-project-collaboration.md` PROJECTS.md 维护约定；下游同步 | 已回流下游 | 真源会话评估·已采纳（4 轮 review 定稿）：方向 + 执行协议已成草案 v2.1——元信息变更台账落 coordination `STATUS.md`、真源可疑时「上报 + 暂停」转交协议、根 `/root/Project/CLAUDE.md` 重设计；Owner 已通过 5 个拍板点（台账位置 STATUS.md / 台账字段 / 停机转交协议 / 根 CLAUDE.md 两节 + 「不算改子项目」例外 / PROJECTS.md 主从关系）。设计草案见 agent-workflow `docs/progress/ad-hoc/2026-06-25-root-claude-md-redesign.md`（v2.1 `1b07f26` + §九 `ced333b`，分支 `fix/source-repo-bcr-no-role-switch`，未合 main）。合并定稿 spec v4 `fec6135`；baseline 改动 1/1b/2 已落地分支 `b8c7c15`（自检过：双入口一致、sync 通过、回流产物已验）；已合 main（merge `66c1e1a` / PR #7）= 已落地真源；下游 baseline 已回流。**BCR-003 终态前置已满足**：改动 3/4/5 全部完成——STATUS.md 建「元信息变更台账」、PROJECTS.md workboard 订正（技术栈 React+shadcn、v0.1 已上线、接入 @66c1e1a）、根 `/root/Project/CLAUDE.md` 重设计；workboard 过期数据已订正并入台账留证 = 已回流下游（终态） | `66c1e1a`（merge PR #7） | ai `6b1c8b8` / xiaobao `2e41947` / workboard `4b8e563`（baseline 已回流）；生态侧改动 3/4/5 已落（STATUS 台账 + PROJECTS + 根索引） | 触发自 workboard v0.1 定位升级 + 技术栈变更；订正根索引时发现无跟踪机制；本仓 BCR-001 回流清单 workboard「未接入」亦已过期；现归 BCR-005 父框架（元信息同步 facet） |
-| BCR-004 | workboard · PM（Owner 要求，2026-06-24） | 删除独立 UI（界面设计师）角色，职责并入 PM | agent-workflow `role-ui.md`（删）、`multi-agent-workflow.md`（角色集/Review 矩阵/UI 阶段）、`runtime.md`（角色路由）、入口 `CLAUDE.md`/`AGENTS.md`（UI 触发/反问）、`standard-iteration-quick.md`（UI 阶段）、模板 `ui-spec.md`；下游各项目 | 已提报 | 待 Owner + 真源会话评估 | — | — | workboard v0.1 已实践 PM 兼 UI（见 v0.1.md 角色说明）；落地由真源评估 |
+| BCR-004 | workboard · PM（Owner 要求，2026-06-24） | 删除独立 UI（界面设计师）角色，职责并入 PM | agent-workflow `role-ui.md`（删）、`multi-agent-workflow.md`（角色集/Review 矩阵/UI 阶段）、`runtime.md`（角色路由）、入口 `CLAUDE.md`/`AGENTS.md`（UI 触发/反问）、`standard-iteration-quick.md`（UI 阶段）、模板 `ui-spec.md`；下游各项目 | 评估中 | 评估中：与 BCR-006 合并为「角色集精简」设计 v1，见 agent-workflow `docs/progress/ad-hoc/2026-06-25-role-slim-ui-tester.md`（UI 方案并入 PRD、UI 影响域 Review 改 PM）。待 Owner 拍 6 点 | — | — | workboard v0.1 已实践 PM 兼 UI（见 v0.1.md 角色说明）；落地由真源评估 |
 | BCR-005 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 生态参与者拓扑 + 跨界写协议（直写 vs 转交）：把 coordination / 根索引 / 框架真源等非开发参与者系统定义进工作流，消除「Owner 人肉转述」缺口 | agent-workflow `cross-project-collaboration.md` 新增「生态参与者与跨界协议」节；下游同步 | 已回流下游 | 真源会话评估·已采纳（4 轮 review 定稿）：设计 v1，四类参与者（框架真源/协调真源/开发型下游/生态索引根）+ 跨界写协议三条 + 「谁能写什么」矩阵。设计草案见 agent-workflow `docs/progress/ad-hoc/2026-06-25-bcr-005-ecosystem-participant-topology.md`（`1045c9d`，分支 `fix/source-repo-bcr-no-role-switch`，未合 main）。合并定稿 spec v4 `fec6135`；baseline 已落地分支 `b8c7c15`（自检过）；已合 main（merge `66c1e1a` / PR #7）= 已落地真源；下游已回流 = 终态 | `66c1e1a`（merge PR #7） | ai `6b1c8b8` / xiaobao `2e41947` / workboard `4b8e563` | 父框架：收编 BCR-003（元信息同步）+ 根 CLAUDE.md 重设计 + 「授权直写 vs 人肉转述」缺口（回归用例 `748dc22`→`58de4eb`） |
+| BCR-006 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 删除 Tester（测试工程师）角色：接口/自动化测试并入 Developer 自测、手动验收由 Owner、取消独立 Tester Review 门禁（Owner 验收升为强制关闭门禁） | agent-workflow `role-tester.md`（删）、`multi-agent-workflow.md`（角色集/流水线/Review 矩阵/关闭检查）、`runtime.md`、入口 `CLAUDE.md`/`AGENTS.md`、`mechanisms.md`、`standard-iteration-quick.md`、模板 `test-report.md`；下游各项目 | 评估中 | 评估中：与 BCR-004 合并为「角色集精简」设计 v1，见 agent-workflow `docs/progress/ad-hoc/2026-06-25-role-slim-ui-tester.md`。待 Owner 拍 6 点 | — | — | 与 BCR-004（删 UI）同类「角色集精简」，合并一份方案/落地 spec |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -157,3 +158,15 @@
 - 不装门禁：coordination 仍不接 dev 工作流（门禁空转），只被定义为一等参与者。
 - 设计草案：agent-workflow `docs/progress/ad-hoc/2026-06-25-bcr-005-ecosystem-participant-topology.md`（`1045c9d`）。
 - 落地由 Owner + agent-workflow 真源会话评估。
+
+---
+
+## BCR-006 · 删除 Tester（测试工程师）角色
+
+- 提出方：agent-workflow · General（真源会话，Owner 驱动，2026-06-25）。
+- 提案：删除独立 Tester 角色，6 角色 → 4 角色（PM/Architect/Developer/DevOps）。与 BCR-004（删 UI）同属「角色集精简」，合并一份方案与落地 spec。
+- 理由（Owner）：Tester 只能调接口测试、没法代人手动点击，与 Developer 自测高度重叠；后续接口/自动化测试由 Developer 自测覆盖，手动点击验收由 Owner 完成、提 bug 给 Developer 修；独立 Tester 角色空转。
+- 职责再分配：接口/自动化测试 → Developer 自测；手动验收 → Owner；Tester Review 门禁取消 → **Owner 验收升为强制关闭门禁** + Developer 自测纪律强化。
+- 风险（供评估）：移除独立质量门禁——缓解见设计 v1 §五（Owner 验收强制 + 自测证据必留）；历史 Tester 产物保留存档不追溯。
+- 设计草案 v1（与 BCR-004 合并）：agent-workflow `docs/progress/ad-hoc/2026-06-25-role-slim-ui-tester.md`。
+- 落地由 Owner + agent-workflow 真源会话评估；精确到行 spec 待 review 通过后出。

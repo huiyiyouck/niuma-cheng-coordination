@@ -3,6 +3,10 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-06-29
+
+- **`ai` 定位升级为生态内部通用 AI 处理中枢**（Owner 拍板）→ [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)，supersede 0001-D5（仅 D5，D1–D4 仍有效）。生态内多项目未来均可调用同一 AI 服务，多调用方预留；v0.1 仍只实现 news-l1 一个 task-type。非 breaking：xiaobao 调用关系 / `score_total` 加权 / `news-l1` 契约边界均不变。已同步 `PROJECTS.md` ai 节，元信息台账待根索引订正。影响项目：`ai`、`xiaobao`。
+
 ## 2026-06-17
 
 - **coordination 仓库初始化骨架**（xiaobao WM）。建立 `README.md` / `PROJECTS.md` / `STATUS.md` / `CHANGELOG.md` / `contracts/news-l1.md` / `communications/xiaobao__ai.md` / `decisions/`。

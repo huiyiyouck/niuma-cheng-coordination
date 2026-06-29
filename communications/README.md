@@ -23,5 +23,6 @@
 | 文档 | 参与项目 | 需求 |
 |------|----------|------|
 | [REQ-001-news-l1.md](REQ-001-news-l1.md) | `xiaobao`, `ai` | REQ-001 新闻 L1 处理 |
+| [REQ-002-arch-research.md](REQ-002-arch-research.md) | `xiaobao`, `ai` | REQ-002 AI 处理架构调研 |
 
 > 每份文档必须被 [../REQUESTS.md](../REQUESTS.md) 对应需求条目的「沟通文档」字段反向链接，避免孤儿沟通记录；[../PROJECTS.md](../PROJECTS.md) 指向 REQUESTS 作为项目级入口。

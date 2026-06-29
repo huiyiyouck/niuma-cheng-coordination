@@ -6,3 +6,4 @@
 | 编号 | 决策 | 影响项目 | 日期 |
 |------|------|----------|------|
 | [0001](0001-ai-hub-split.md) | AI 处理中枢拆为独立项目（D1–D5） | xiaobao, ai | 2026-06-16 |
+| [0002](0002-ai-hub-ecosystem-positioning.md) | ai 定位升级为生态内部通用 AI 处理中枢（supersede D5） | xiaobao, ai | 2026-06-29 |

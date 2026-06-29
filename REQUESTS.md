@@ -12,7 +12,7 @@
 | 需求 id | 提出方 | 内容 | 承接方 | 转入迭代 | 状态 | 沟通文档 |
 |---------|--------|------|--------|----------|------|----------|
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（待启动） | 联调中 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
-| REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai（Owner 指派，待 ai 会话承接确认） | — | 已提报 | 承接后建 |
+| REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，待启动） | 已承接 | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
 
 ---
 
@@ -34,7 +34,10 @@
 - 提出方：xiaobao · Architect
 - 提报日期：2026-06-24
 - 内容：调研两个外部参考项目的 AI 处理架构，为 `ai`（Agent Hub）把 REQ-001 的 L1 从 stub 转真实、以及未来 L0 分层提供设计输入。请 `ai` 项目组在此基础上继续深入调研并形成自己的架构方案。
-- 承接方：`ai`（Owner 指派；正式承接由 ai 会话 PM/Architect 确认后回填本条 + 建沟通文档）
+- 承接方：`ai`（AI 处理中枢）· PM（ck）—— Owner 指派，2026-06-29 ai PM 评估正式承接（承接登记由 PM 做，架构方案实质产出归 Architect）
+- 承接说明：承接背景为 Owner 2026-06-29 拍板 ai 定位升级为生态内部通用 AI 处理中枢（见 [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)）；REQ-002 调研范围相应在「news-l1 真实化架构」基础上增加「生态内部通用骨架」维度
+- 转入迭代：作为 ai v0.1 的**前置架构调研** —— v0.1 PRD 待 REQ-002 架构结论后由 ai PM 创建
+- 沟通文档：[communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md)
 - 参考项目（本地）：
   - `Horizon`（`/root/Horizon`，Python + asyncio）—— 重度 LLM，与 Agent Hub 几乎同构，最高借鉴价值
   - `ai-news-aggregator`（`/root/ai-news-aggregator`，TS/Node）—— 轻度 LLM（纯规则过滤），一面「少用 LLM」的反向参照

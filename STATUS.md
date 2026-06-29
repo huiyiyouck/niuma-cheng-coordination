@@ -3,14 +3,14 @@
 > 跨项目当前状态真源：各项目阶段、当前阻塞、谁等谁、下一步。
 > 单项目内部细节不在此展开，从「当前入口」链接回各项目 `docs/progress/INDEX.md`。
 > 跨项目需求池见 [REQUESTS.md](REQUESTS.md)（提报中心）。
-> 最近更新：2026-06-25（BCR-003/005 落地：新增「元信息变更台账」，订正 workboard 元信息）
+> 最近更新：2026-06-29（ai 定位升级 decisions/0002；REQ-002 ai PM 承接；元信息台账登记 ai 定位变更，待 PROJECTS/根索引同步）
 
 ## 各项目当前状态
 
 | 项目 | 阶段 | 当前入口 | 备注 |
 |------|------|----------|------|
 | `xiaobao` | v0.6 标准迭代，实现阶段联调精修，Developer 侧已收口 | 项目 `docs/progress/INDEX.md` | 等待 Owner 报具体 bug |
-| `ai` | 仓库骨架可运行（冒烟 2 passed），**已接入团队工作流**，PM（ck）已正式承接 REQ-001 | 项目 `docs/progress/INDEX.md` | 已立项；REQ-001 规划转入 v0.1 标准迭代（待启动）；各节点真实逻辑仍为占位（stub） |
+| `ai` | 仓库骨架可运行（冒烟 2 passed），**已接入团队工作流**；PM（ck）已承接 REQ-001、REQ-002；定位升级为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-002 架构调研（前置）→ REQ-001 转 v0.1 标准迭代；各节点真实逻辑仍为占位（stub） |
 
 ## 跨项目阻塞与谁等谁
 
@@ -45,3 +45,4 @@
 | workboard | 技术栈 | 本地 Node + 静态前端 | React 18 + Vite + Tailwind v4 + shadcn + 本地 Node 聚合后端 | v0.1（`v0.1-summary.md`） | ✅ | ✅ |
 | workboard | 上线状态 | 待开发 MVP | v0.1 已上线 `workboard.huiyiyou.cloud` | v0.1 关闭 | ✅ | ✅ |
 | workboard | 接入版本 | @1b01fba | @66c1e1a | 回流 `4b8e563` | ✅ | ✅ |
+| ai | 定位 | AI 处理中枢 / Agent Hub（职责限 xiaobao L1 新闻处理） | niuma-cheng 生态内部通用 AI 处理中枢（多调用方预留，首落地 xiaobao news-l1） | decisions/0002（2026-06-29） |  |  |

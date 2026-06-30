@@ -5,7 +5,7 @@
 - 定位：REQ-001 被承接之后的协作与联调沟通
 - 契约真源：[../contracts/news-l1.md](../contracts/news-l1.md)（涉及接口/字段时以此为准）
 - 当前状态入口：[../STATUS.md#news-l1-contract](../STATUS.md)
-- 最近更新：2026-06-22
+- 最近更新：2026-06-29
 
 ## 关系概述
 
@@ -27,6 +27,17 @@
 ## 联调沟通
 
 > 承接后的接口对接 / 字段对齐 / 调试 / 版本跟进，倒序排列，条目标注所属需求 id。
+
+### 2026-06-29 · [REQ-001] ai 启动 v0.1 实现，提出对 xiaobao 的能力诉求
+
+- `ai` 已据 REQ-002 架构结论启动 v0.1 标准迭代（news-l1 stub→真实，PRD R1：ai `docs/progress/iterations/v0.1-prd.md`）。
+- 实现 news-l1「按需工具调用」时，三类工具后端分工 Owner 2026-06-29 已拍定，**唯一需 xiaobao 提供的是库内检索 KB search**（新闻库在 xiaobao，ai 无直接访问）：
+  - **库内检索 KB search（需 xiaobao 提供）**：请 xiaobao 定 —— a) 预取填充 `kb_results`（契约已有字段）加量/加质；还是 b) 提供实时检索接口供 ai 按需调。
+  - 链接读取 link read：**ai 自行 HTTP 抓取**，不需 xiaobao。
+  - Web 搜索 web search：**Owner 提供搜索 API key、ai 自配调用**，不需 xiaobao。
+- 边界：不改 `news-l1` 契约则优先复用现有预取字段（`kb_results`/`link_content`/`search_summary`）；若需新接口/字段，另走 [../contracts/](../contracts/) 契约变更流程。
+- 对 v0.1 影响：ai v0.1 的 AC-5（按需工具调用）先做 ai 能独立完成的部分（消费预取 + `needs_context` 标记 + 自抓 link/自配 web）；**主动 KB 检索依赖本诉求的 xiaobao 响应**，落地后补，不阻塞 v0.1 其余范围。
+- 待 xiaobao（PM/Architect/Developer）响应三类工具分工。
 
 ### 2026-06-22 · [REQ-001] ai PM 正式承接
 
@@ -51,3 +62,4 @@
 | ai 配置 git remote 并 Bootstrap 团队工作流 | Owner / ai 会话 | 已完成（2026-06-21，见 [../STATUS.md#ai-bootstrap](../STATUS.md)） |
 | REQ-001 承接留痕补登 | ai PM/Architect | 已完成（2026-06-22，ai PM ck 承接） |
 | REQ-001 news-l1 小批量观察 | xiaobao Developer | 进行中 |
+| ai news-l1 库内检索 KB search 能力需 xiaobao 提供（预取加量 vs 实时接口；link/web 已由 ai 自抓 + Owner key 解决） | xiaobao（PM/Architect/Dev） | 待响应（2026-06-29 ai 提出） |

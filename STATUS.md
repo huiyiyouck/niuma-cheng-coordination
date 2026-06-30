@@ -3,13 +3,13 @@
 > 跨项目当前状态真源：各项目阶段、当前阻塞、谁等谁、下一步。
 > 单项目内部细节不在此展开，从「当前入口」链接回各项目 `docs/progress/INDEX.md`。
 > 跨项目需求池见 [REQUESTS.md](REQUESTS.md)（提报中心）。
-> 最近更新：2026-06-29（ai 定位升级 decisions/0002；REQ-002 ai PM 承接；元信息台账 ai 定位变更 → PROJECTS + 生态根索引均已同步）
+> 最近更新：2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）。2026-06-29（ai 定位升级 decisions/0002；REQ-002 ai PM 承接；元信息台账 ai 定位变更 → PROJECTS + 生态根索引均已同步）
 
 ## 各项目当前状态
 
 | 项目 | 阶段 | 当前入口 | 备注 |
 |------|------|----------|------|
-| `xiaobao` | v0.6 标准迭代，实现阶段联调精修，Developer 侧已收口 | 项目 `docs/progress/INDEX.md` | 等待 Owner 报具体 bug |
+| `xiaobao` | v0.6 已实现完成并部署生产上线（2026-06-28 去软链接化隔离部署）；待 DevOps 补登部署记录 + PM 迭代关闭检查 | 项目 `docs/progress/INDEX.md` | REQ-001 KB search 实时接口（方案 b）待 Architect 设计契约后立项；生产 AI 处理默认关闭（X 直显） |
 | `ai` | 仓库骨架可运行（冒烟 2 passed），**已接入团队工作流**；PM（ck）已承接 REQ-001、REQ-002；定位升级为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-002 架构调研（前置）→ REQ-001 转 v0.1 标准迭代；各节点真实逻辑仍为占位（stub） |
 
 ## 跨项目阻塞与谁等谁

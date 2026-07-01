@@ -3,6 +3,11 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-07-01
+
+- **新增契约 `kb-search` v1** → [contracts/kb-search.md](contracts/kb-search.md)。用于 ai 在 news-l1 处理中按需反向调用 xiaobao 做库内新闻实时检索。非 breaking（首次登记）。影响项目：`xiaobao`、`ai`。
+- **xiaobao 响应 REQ-001 联调诉求**：实现前端 `/debug/ai` 验收页、后端 `POST /v1/ai-debug/news-l1-runs`、AI Hub HTTP 客户端、`POST /v1/kb-search`。`news-l1` v1 契约不变。影响项目：`xiaobao`、`ai`。
+
 ## 2026-06-29
 
 - **`ai` 定位升级为生态内部通用 AI 处理中枢**（Owner 拍板）→ [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)，supersede 0001-D5（仅 D5，D1–D4 仍有效）。生态内多项目未来均可调用同一 AI 服务，多调用方预留；v0.1 仍只实现 news-l1 一个 task-type。非 breaking：xiaobao 调用关系 / `score_total` 加权 / `news-l1` 契约边界均不变。已同步 `PROJECTS.md` ai 节，元信息台账待根索引订正。影响项目：`ai`、`xiaobao`。

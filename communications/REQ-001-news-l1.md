@@ -3,7 +3,7 @@
 - 参与项目：`xiaobao`, `ai`
 - 相关需求：REQ-001（状态见 [../REQUESTS.md](../REQUESTS.md)）
 - 定位：REQ-001 被承接之后的协作与联调沟通
-- 契约真源：[../contracts/news-l1.md](../contracts/news-l1.md)（涉及接口/字段时以此为准）
+- 契约真源：[../contracts/news-l1.md](../contracts/news-l1.md)；库内检索反向接口见 [../contracts/kb-search.md](../contracts/kb-search.md)
 - 当前状态入口：[../STATUS.md#news-l1-contract](../STATUS.md)
 - 最近更新：2026-07-01
 
@@ -27,6 +27,39 @@
 ## 联调沟通
 
 > 承接后的接口对接 / 字段对齐 / 调试 / 版本跟进，倒序排列，条目标注所属需求 id。
+
+### 2026-07-01 · [REQ-001] ai 服务已部署测试环境，news-l1 主链路真实冒烟通过（回填证据）
+
+- **ai 服务就绪**：ai 已部署到测试环境 **`http://127.0.0.1:8100`**（当前机器 uvicorn 常驻），`GET /health` 返回 200。LLM 走 openclaw 火山大模型 `doubao-seed-2.0-pro`（OpenAI 兼容）。
+- **真实调用证据（回填 xiaobao 第 5 点要求）**：
+  - `run_id`：`run_bcf24393b947`；`status`：**succeeded**；`error`：null。
+  - `tool_summary`：`web_search=1`、`link_read=0`、`kb_search=1`。
+  - `kb_search` 已按 `contracts/kb-search.md` 主动发起，但 xiaobao `127.0.0.1:8001` 未起 → 降级 `degraded:kb_search_failed`，整体仍 `succeeded`（AC-6 语义）。
+  - 真实产出：四维评分（时效 5 / 影响 4 / 可信 3 / 清晰 4，各带 reason）、五类标签、中文摘要、分析；`web_search` 真实调 Tavily 成功。
+- **对 xiaobao 5 点诉求的回应**：
+  1. `AI_HUB_BASE_URL` = `http://127.0.0.1:8100`（同机），`/health` 200 已验证。
+  2. 鉴权：测试环境 **不启用**（Owner 定），xiaobao 直连即可，无需 `Authorization`；上线前再加。
+  3. `POST /v1/runs/news-l1` 已按 `contracts/news-l1.md` 部署（snake_case、预取 `kb_results` 不计 `tool_summary`、link read 从 `raw_content.url`/`canonical_url` 取）。
+  4. KB 回调：ai 已实现调用 `POST /v1/kb-search`（`KB_SEARCH_URL=http://127.0.0.1:8001/v1/kb-search`）；当前 ai 侧 `KB_ADMIN_TOKEN` 留空——**请 xiaobao 确认测试环境是否需要 `x-admin-token`**，需要则告知 token 值。
+  5. 真实调用证据见上。
+- **待 xiaobao**：起测试服务（含 `8001` KB）+ 配 `AI_HUB_BASE_URL=http://127.0.0.1:8100` → 在 `/debug/ai` 选库内新闻发起端到端验收；届时 `kb_search` 可端到端跑通。
+- **观察（非阻塞）**：单条处理约 104s（reasoning 模型 + 工具串行），联调可接受；后续可评估换更快模型或优化工具并发。
+
+### 2026-07-01 · [REQ-001] xiaobao 实现 AI 联调验收页 + news-l1 触发入口 + KB search v1
+
+- **xiaobao 侧响应**：Developer 已实现前端 `AI 联调` 页面，支持从库内已入库新闻候选中搜索/选择，按真实业务同一套 raw_item→`L1Input` 映射构造请求，调用 ai `/v1/runs/news-l1`，并在页面展示请求 JSON、响应 JSON、状态、耗时、工具调用统计、标题/摘要/四维评分/标签。
+- **契约定稿依据**：已核对 ai 侧 `src/agent_hub/schemas.py`、`graphs/news_l1.py`、`tools/link_reader.py` 当前实现：`news-l1` 使用 snake_case `L1Input` / `RunResponse`；预取 `kb_results` 不计入 `tool_summary`；link read 只从 `raw_content.url` / `raw_content.canonical_url` 取 URL。coordination `contracts/news-l1.md` 已补齐这些字段语义与 JSON 示例。
+- **后端触发入口**：新增 `GET /v1/ai-debug/candidates` 与 `POST /v1/ai-debug/news-l1-runs`。该入口用于验收联调，默认只返回 AI 结果，不写回 `processed_news`，避免调试污染线上展示内容。
+- **AI Hub 客户端**：xiaobao 后端新增 `AI_HUB_BASE_URL` / `AI_HUB_API_TOKEN` / `AI_HUB_TIMEOUT_MS` 配置和 HTTP 调用客户端；真实 worker 也可通过 `L1_ENGINE=ai` 复用同一 AI Hub 调用路径。
+- **KB search 契约**：新增 ai→xiaobao 实时库内检索契约 [../contracts/kb-search.md](../contracts/kb-search.md) v1，并实现 `POST /v1/kb-search`。定稿字段：`query` 必填，`top_n` 默认 5 / 最大 10，`exclude_raw_item_id` 与 `source_id` 可选排除自匹配/同源匹配，返回 `results[]` 包含 `news_id`、`raw_item_id`、`title`、`summary`、`content`、`published_at`、`score_total`、`importance_score`、`source`、`url`。该接口不改 `news-l1` v1 契约。
+- **xiaobao 需要 ai 提供 / 确认**：
+  1. 测试环境可访问的 ai 服务 base URL（xiaobao 将配置为 `AI_HUB_BASE_URL`），并保证 `GET {base_url}/health` 返回 200。
+  2. 是否启用调用鉴权；如启用，请提供测试环境 token，xiaobao 将配置为 `AI_HUB_API_TOKEN` 并以 `Authorization: Bearer {token}` 调用。
+  3. `POST {base_url}/v1/runs/news-l1` 已按 [../contracts/news-l1.md](../contracts/news-l1.md) 当前版本部署，尤其是 `raw_content.url` / `canonical_url`、`KbResult`、`tool_summary` 统计口径与示例一致。
+  4. ai 侧接入 xiaobao KB 回调配置：测试环境 xiaobao URL 为 `http://127.0.0.1:8001`（同机）或 `https://test.huiyiyou.cloud`（经 nginx），接口为 `POST /v1/kb-search`；若 xiaobao 测试服务启用管理 token，ai 侧需按约定发送 `x-admin-token`。
+  5. ai 侧联调时请回填一次真实调用证据：请求的 `run_id`、`status`、`tool_summary`、是否触发 `kb_search`、失败时 `error`。
+- **待联调**：ai 侧启动服务并提供 `AI_HUB_BASE_URL` 后，Owner 可在 xiaobao 前端 `/debug/ai` 页面选择新闻发起真实端到端验收；ai 侧可用 `POST /v1/kb-search` 验证按需库内检索。
+- **测试环境部署**：xiaobao 已部署到测试环境。前端入口：`https://test.huiyiyou.cloud/debug/ai`；后端测试服务：`news-api-test.service`（`:8001`）。已验证 `GET /v1/ai-debug/candidates?page_size=1` 返回 200，`POST /v1/kb-search` 返回 200。当前 `http://127.0.0.1:8100/health` 不通，真实 news-l1 调用等待 ai 服务 base URL / 运行态。
 
 ### 2026-07-01 · [REQ-001] ai v0.1 实现完成，请 xiaobao 提供联调触发入口
 
@@ -83,5 +116,5 @@
 | ai 配置 git remote 并 Bootstrap 团队工作流 | Owner / ai 会话 | 已完成（2026-06-21，见 [../STATUS.md#ai-bootstrap](../STATUS.md)） |
 | REQ-001 承接留痕补登 | ai PM/Architect | 已完成（2026-06-22，ai PM ck 承接） |
 | REQ-001 news-l1 小批量观察 | xiaobao Developer | 进行中 |
-| ai news-l1 库内检索 KB search 能力需 xiaobao 提供（link/web 已由 ai 自抓 + Owner key 解决） | xiaobao（PM/Architect/Dev） | xiaobao 已定**方案 b 实时接口**（2026-06-30，Owner 拍板）；待 xiaobao Architect 设计接口契约 → 入 `contracts/` → 两侧实现联调 |
-| ai↔xiaobao news-l1 真实数据端到端联调：需 xiaobao 提供「选库内已有新闻 → 构造同样 `L1Input` 调 ai」的**联调触发入口**（与真实业务入口只差新闻来源） | xiaobao（PM/Dev） | 待响应（ai 2026-07-01 提；ai 侧 `/v1/runs/news-l1` 已就绪） |
+| ai news-l1 库内检索 KB search 能力需 xiaobao 提供（link/web 已由 ai 自抓 + Owner key 解决） | xiaobao（PM/Architect/Dev） | ✅ xiaobao 已实现 `POST /v1/kb-search`，契约见 `contracts/kb-search.md` v1；待 ai 侧联调调用 |
+| ai↔xiaobao news-l1 真实数据端到端联调：需 xiaobao 提供「选库内已有新闻 → 构造同样 `L1Input` 调 ai」的**联调触发入口**（与真实业务入口只差新闻来源） | xiaobao（PM/Dev） | ✅ xiaobao 已实现前端 `/debug/ai` 验收页 + 后端 `/v1/ai-debug/news-l1-runs`；待 ai 服务地址配置后真实验收 |

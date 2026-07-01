@@ -49,6 +49,10 @@ x-admin-token: {xiaobao 管理 token，如生产环境启用}
 | `query` | string | 回显查询词 |
 | `results` | KbSearchResult[] | 命中的库内新闻 |
 
+### 空结果语义
+
+`results: []` 是合法的 200 响应，表示本次查询没有命中库内候选；调用方不得将其等同于接口失败或传输失败。ai 侧可以选择继续 web_search / link_read / LLM 主流程，但处理标签应区分“空命中”和“工具失败”，例如 `kb_search_empty`，不应标记为 `kb_search_failed`。
+
 ### KbSearchResult
 
 | 字段 | 类型 | 说明 |

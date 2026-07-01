@@ -5,6 +5,7 @@
 
 ## 2026-07-01
 
+- **REQ-001 联调证据回填**：xiaobao 测试环境 `/debug/ai` 已部署，xiaobao→ai news-l1 主链路成功；ai→xiaobao `kb-search` 命中用例成功。补充 `kb-search` v1 空结果语义：`results: []` 是 200 正常响应，不等同工具失败。非 breaking。影响项目：`xiaobao`、`ai`。
 - **新增契约 `kb-search` v1** → [contracts/kb-search.md](contracts/kb-search.md)。用于 ai 在 news-l1 处理中按需反向调用 xiaobao 做库内新闻实时检索。非 breaking（首次登记）。影响项目：`xiaobao`、`ai`。
 - **xiaobao 响应 REQ-001 联调诉求**：实现前端 `/debug/ai` 验收页、后端 `POST /v1/ai-debug/news-l1-runs`、AI Hub HTTP 客户端、`POST /v1/kb-search`。`news-l1` v1 契约不变。影响项目：`xiaobao`、`ai`。
 

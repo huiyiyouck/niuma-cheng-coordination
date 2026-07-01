@@ -28,6 +28,26 @@
 
 > 承接后的接口对接 / 字段对齐 / 调试 / 版本跟进，倒序排列，条目标注所属需求 id。
 
+### 2026-07-01 · [REQ-001] xiaobao 测试环境已部署，双向联调验证通过；KB 空结果语义待 ai 优化
+
+- **xiaobao 提交与部署**：xiaobao 已提交 `3fc71e6 Developer: 增加 AI 联调验收入口`，测试环境已部署。前端验收入口：`https://test.huiyiyou.cloud/debug/ai`；后端测试服务：`news-api-test.service`（`:8001`）。
+- **xiaobao 接口验证**：
+  - `GET http://127.0.0.1:8001/health` 返回 200。
+  - `GET /v1/ai-debug/candidates?page_size=1` 返回 200，可取库内候选新闻。
+  - `POST /v1/kb-search` 返回 200，命中时返回 `results[].content` / `summary` 等 ai 可消费字段。
+- **xiaobao→ai 真实调用验证**：通过 xiaobao 测试后端 `POST /v1/ai-debug/news-l1-runs` 调用 ai `POST /v1/runs/news-l1` 成功。
+  - `run_id`：`run_2a4dbc15f308`；`status`：**succeeded**；`elapsed_ms`：`73601`。
+  - `tool_summary`：`web_search=0`、`link_read=0`、`kb_search=0`。该用例由 xiaobao 预填 `search_summary`，ai 未主动调用工具，符合 `tool_summary` 只统计 ai 主动工具调用的契约口径。
+  - 返回包含标题、摘要、分析、四维评分、五类标签；`processing` 含 `engine:agent_hub`、`llm:volcengine`。
+- **ai→xiaobao KB 主动检索验证（命中用例）**：直接调用 ai `POST /v1/runs/news-l1`，构造可命中 xiaobao KB 的标题 `OpenAI Codex大幅扩展插件生态，可一键变身62个应用的工作专家`。
+  - `run_id`：`run_2e0072cba2a3`；`status`：**succeeded**；`elapsed_ms`：`76932`。
+  - `tool_summary`：`web_search=1`、`link_read=0`、`kb_search=1`。
+  - `processing` 未出现 `degraded:kb_search_failed`，说明 ai 主动 KB 回调 xiaobao `POST /v1/kb-search` 已端到端打通。
+- **ai→xiaobao KB 空结果用例（待 ai 优化语义）**：标题 `OpenAI Codex 投资插件` + `domain_tags:["AI"]` 调用 xiaobao `POST /v1/kb-search` 时返回 200 + `results: []`。这是 `kb-search` v1 的正常空命中响应，不是接口错误。
+  - 当前 ai 对该用例仍返回 `status=succeeded`，`tool_summary.kb_search=1`，但 `processing` 会追加 `degraded:kb_search_failed`。
+  - 结论：链路可用，剩余问题是 ai 侧把“空结果”统一标成“失败”的语义不准确。建议 ai 改为 `kb_search_empty` 或不降级；必要时优化 `_build_kb_query` 查询词策略，提高命中率。
+- **当前结论**：`news-l1` 主链路、xiaobao `/debug/ai` 验收入口、ai→xiaobao `/v1/kb-search` 双向链路均已可联调验收；`news-l1` v1 不需要变更。`kb-search` v1 补充空结果语义：`results: []` 是 200 正常响应。
+
 ### 2026-07-01 · [REQ-001] ai 服务已部署测试环境，news-l1 主链路真实冒烟通过（回填证据）
 
 - **ai 服务就绪**：ai 已部署到测试环境 **`http://127.0.0.1:8100`**（当前机器 uvicorn 常驻），`GET /health` 返回 200。LLM 走 openclaw 火山大模型 `doubao-seed-2.0-pro`（OpenAI 兼容）。

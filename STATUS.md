@@ -3,7 +3,7 @@
 > 跨项目当前状态真源：各项目阶段、当前阻塞、谁等谁、下一步。
 > 单项目内部细节不在此展开，从「当前入口」链接回各项目 `docs/progress/INDEX.md`。
 > 跨项目需求池见 [REQUESTS.md](REQUESTS.md)（提报中心）。
-> 最近更新：2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）。2026-06-29（ai 定位升级 decisions/0002；REQ-002 ai PM 承接；元信息台账 ai 定位变更 → PROJECTS + 生态根索引均已同步）
+> 最近更新：2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）。2026-06-29（ai 定位升级 decisions/0002；REQ-002 ai PM 承接；元信息台账 ai 定位变更 → PROJECTS + 生态根索引均已同步）
 
 ## 各项目当前状态
 
@@ -30,11 +30,19 @@
 - 下一步责任：任一侧需改契约时，先改 `contracts/news-l1.md` 再改代码。
 - 已验证：`ai` 端 `news-l1` 本机 + `xiaobao` `news_test` 库单条真实 raw_item 端到端通过（2026-06-16，见 xiaobao INDEX 跨任务待办 L1 Agent 化条目）。
 
+<a name="news-l1-integration"></a>
+### 3. news-l1 真实数据端到端联调
+
+- 状态：ai 侧 v0.1（news-l1 stub→真实）实现阶段已完成、自测通过（36 passed），`POST /v1/runs/news-l1` 就绪；真实端到端（真 LLM + 真工具 + 真新闻数据）尚未验证。
+- 谁等谁：**ai 等 xiaobao** —— 需 xiaobao 提供「选库内已有新闻 → 按与真实业务相同方式构造 `L1Input` 调 ai」的**联调触发入口**（与真实业务入口只差新闻来源）。详见 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md)（2026-07-01 条）。
+- 下一步责任：xiaobao（PM / Developer）确认是否新增联调入口、由谁实现、预计可联调时间；**不改 news-l1 v1 契约**。
+
 ## 下一步汇总
 
 1. ~~Owner：为 `niuma-cheng-ai` 配置 GitHub remote~~ —— 已完成（2026-06-21），`PROJECTS.md` 仓库地址已回填。
 2. ai 项目会话：PM 已承接 REQ-001；Owner 确认后由 PM 创建 `v0.1-prd.md` 启动标准迭代，实现 news-l1 真实 L1 处理（stub→真实）。
 3. 任一侧改 news-l1 契约：先改 `contracts/news-l1.md`，CHANGELOG 记一行。
+4. xiaobao 项目会话：评估 ai 2026-07-01 提的 news-l1 **联调触发入口**诉求（选库内已有新闻 → 构造同样 `L1Input` 调 ai），确认由谁实现、可联调时间（见 communications/REQ-001 2026-07-01 条）。
 
 ## 元信息变更台账
 

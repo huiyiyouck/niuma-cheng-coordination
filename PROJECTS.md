@@ -30,15 +30,15 @@
 | 关联项目 | `xiaobao`（服务方 ← 调用方） |
 | 沟通文档 | 见 [REQUESTS.md](REQUESTS.md)（当前 REQ-001 指向 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md)） |
 
-## agent-workflow — 团队工作流真源
+## agent-workflow — AI 助手团队工作流真源
 
 | 字段 | 内容 |
 |------|------|
 | 项目 id | `agent-workflow` |
-| 名称 | AI 助手团队工作流真源 |
+| 名称 | AI 助手团队工作流真源（内部定位：一人公司 AI 组织操作架构·SOP 真源） |
 | 技术栈 | Markdown + shell scripts |
 | 仓库 | `git@github.com:huiyiyouck/agent-workflow.git`（本地 `~/Project/agent-workflow`） |
-| 职责边界 | 工作流入口、baseline、templates、安装/同步脚本的单一真源；**只承接基线修正提案（BCR）**，不承接业务功能 / 接口契约 |
+| 职责边界 | 一人公司 AI 组织操作架构 SOP 的单一真源（对外品牌：AI 开发团队工作流）；工作流入口、baseline、templates、安装/同步脚本；**只承接基线修正提案（BCR）**，不承接业务功能 / 接口契约 |
 | 当前入口 | 真源仓库 `docs/ROADMAP.md`（P8 基线修正提案走 coordination 管理，自举中） |
 | 关联项目 | `xiaobao`、`ai`、`workboard` 等已接入 agent-workflow 的项目 |
 | 沟通文档 | 无固定 communications；基线修正提案见 [REQUESTS.md#基线修正提案池](REQUESTS.md#基线修正提案池) |

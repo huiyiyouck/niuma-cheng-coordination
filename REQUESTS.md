@@ -81,7 +81,7 @@
 | BCR-004 | workboard · PM（Owner 要求，2026-06-24） | 删除独立 UI（界面设计师）角色，职责并入 PM | agent-workflow `role-ui.md`（删）、`multi-agent-workflow.md`（角色集/Review 矩阵/UI 阶段）、`runtime.md`（角色路由）、入口 `CLAUDE.md`/`AGENTS.md`（UI 触发/反问）、`standard-iteration-quick.md`（UI 阶段）、模板 `ui-spec.md`；下游各项目 | 已回流下游 | 已采纳（设计 v3 经 3 轮 review + Owner 拍 8 点）并落地：UI 并入 PRD、UI 影响域 Review 改 PM、`ui-spec` 墓碑；合并 spec `docs/progress/ad-hoc/2026-06-25-role-slim-ui-tester.md`；baseline 合 main（PR #8，merge `6f433ca`），下游已回流 = 终态 | `6f433ca`（merge PR #8） | ai `504f7c3` / xiaobao `9bab45d` / workboard `d8e6b74` | workboard v0.1 已实践 PM 兼 UI（见 v0.1.md 角色说明）；落地由真源评估 |
 | BCR-005 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 生态参与者拓扑 + 跨界写协议（直写 vs 转交）：把 coordination / 根索引 / 框架真源等非开发参与者系统定义进工作流，消除「Owner 人肉转述」缺口 | agent-workflow `cross-project-collaboration.md` 新增「生态参与者与跨界协议」节；下游同步 | 已回流下游 | 真源会话评估·已采纳（4 轮 review 定稿）：设计 v1，四类参与者（框架真源/协调真源/开发型下游/生态索引根）+ 跨界写协议三条 + 「谁能写什么」矩阵。设计草案见 agent-workflow `docs/progress/ad-hoc/2026-06-25-bcr-005-ecosystem-participant-topology.md`（`1045c9d`，分支 `fix/source-repo-bcr-no-role-switch`，未合 main）。合并定稿 spec v4 `fec6135`；baseline 已落地分支 `b8c7c15`（自检过）；已合 main（merge `66c1e1a` / PR #7）= 已落地真源；下游已回流 = 终态 | `66c1e1a`（merge PR #7） | ai `6b1c8b8` / xiaobao `2e41947` / workboard `4b8e563` | 父框架：收编 BCR-003（元信息同步）+ 根 CLAUDE.md 重设计 + 「授权直写 vs 人肉转述」缺口（回归用例 `748dc22`→`58de4eb`） |
 | BCR-006 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 删除 Tester（测试工程师）角色：接口/自动化测试并入 Developer 自测、手动验收由 Owner、取消独立 Tester Review 门禁（Owner 验收升为强制关闭门禁） | agent-workflow `role-tester.md`（删）、`multi-agent-workflow.md`（角色集/流水线/Review 矩阵/关闭检查）、`runtime.md`、入口 `CLAUDE.md`/`AGENTS.md`、`mechanisms.md`、`standard-iteration-quick.md`、模板 `test-report.md`；下游各项目 | 已回流下游 | 已采纳（设计 v3 经 3 轮 review + Owner 拍 8 点）并落地：Tester 删除，接口/自动化测试并入 Developer 自测、手动验收由 Owner（强制关闭门禁）、验收/回归复核由 Architect 或 DevOps、`test-plan` 墓碑 / `test-report`→自测报告；baseline 合 main（PR #8，merge `6f433ca`），下游已回流 = 终态 | `6f433ca`（merge PR #8） | ai `504f7c3` / xiaobao `9bab45d` / workboard `d8e6b74` | 与 BCR-004（删 UI）同类「角色集精简」，合并一份方案/落地 spec |
-| BCR-007 | agent-workflow · General（真源会话，Owner 驱动 2026-07-03） | 组织架构定位升级：生态参与者拓扑修订为「指挥官—参谋长制（薄公司）」——撤销 coordination 专职会话并入参谋长、参谋长获回流执行权、元信息同步从三方接力简化为两方接力 | agent-workflow `cross-project-collaboration.md` §生态参与者与跨界协议（四类参与者→三类+场所、字段级白名单矩阵、两方接力）、`README.md` 定位段升级；下游同步 | 评估中 | Owner 两轮 review 通过，方案 v3 已定稿；落地按 spec §4 九步执行（新身份先于新权限生效）；spec 见 agent-workflow `docs/superpowers/specs/2026-07-03-org-positioning-upgrade-design.md`（commit `b108ea6`） | 待落地 | 待回流 | 自举型，同 BCR-005 先例；矩阵连带修订：框架真源可登记自身元信息变更行 |
+| BCR-007 | agent-workflow · General（真源会话，Owner 驱动 2026-07-03） | 组织架构定位升级：生态参与者拓扑修订为「指挥官—参谋长制（薄公司）」——撤销 coordination 专职会话并入参谋长、参谋长获回流执行权、元信息同步从三方接力简化为两方接力 | agent-workflow `cross-project-collaboration.md` §生态参与者与跨界协议（四类参与者→三类+场所、字段级白名单矩阵、两方接力）、`README.md` 定位段升级；下游同步 | 回流中 | Owner 两轮 review 通过，方案 v3 已定稿；已采纳；落地按 spec §4 九步执行（新身份先于新权限生效）；spec 见 agent-workflow `docs/superpowers/specs/2026-07-03-org-positioning-upgrade-design.md`（commit `b108ea6`） | `4ec68ce`（merge，feat `2de5947`） | ai: 待回流；xiaobao: 待回流；workboard: 待回流 | 自举型，同 BCR-005 先例；矩阵连带修订：框架真源可登记自身元信息变更行 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -192,5 +192,9 @@
   - 框架真源写权扩为「BCR 池 + 登记自身元信息变更行」
 - 方案文档：agent-workflow `docs/superpowers/specs/2026-07-03-org-positioning-upgrade-design.md`（v3，commit `b108ea6`）
 - 落地步骤：spec §4 九步执行，排序原则「新身份先于新权限生效」
-- 评估结论：评估中（方案 v3 经 Owner 两轮 review 通过，待实施落地）
+- 评估结论：已采纳；已落地真源（commit `4ec68ce`，feat `2de5947`）；回流中
+- 真源落地内容：
+  - `cross-project-collaboration.md` §生态参与者与跨界协议：四类→三类+场所、字段级白名单矩阵、两方接力
+  - `README.md`：加内部架构定位段（指挥官—参谋长制·薄公司）
+- 回流范围：ai / xiaobao / workboard 三下游（均已接入 agent-workflow）
 

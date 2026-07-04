@@ -26,7 +26,7 @@
 | 仓库 | `git@github.com:huiyiyouck/niuma-cheng-ai.git`（本地 `~/Project/niuma-cheng-ai`） |
 | 定位 | niuma-cheng **生态内部通用** AI 处理中枢（Agent Hub）：生态内多项目未来均可调用同一 AI 处理服务，多调用方预留；非对外泛化平台。见 [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)（supersede 0001-D5） |
 | 职责边界 | 首落地 xiaobao news-l1：四维评分（`score`+`reason`）、标签、摘要、翻译、按需工具调用（KB 检索 / 链接读取 / Web 搜索）；**不**做评分加权 `score_total`（留在 xiaobao）。v0.1 仅实现 news-l1 一个 task-type，多调用方/多任务为预留扩展点 |
-| 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入团队工作流**，工作台已初始化，未进入角色工作；当前迭代：无） |
+| 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入团队工作流**，v0.1 已交付并关闭（2026-07-04，`v0.1-summary.md`）；当前迭代：无） |
 | 关联项目 | `xiaobao`（服务方 ← 调用方） |
 | 沟通文档 | 见 [REQUESTS.md](REQUESTS.md)（当前 REQ-001 指向 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md)） |
 

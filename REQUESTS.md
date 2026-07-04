@@ -84,6 +84,7 @@
 | BCR-007 | agent-workflow · General（真源会话，Owner 驱动 2026-07-03） | 组织架构定位升级：生态参与者拓扑修订为「指挥官—参谋长制（薄公司）」——撤销 coordination 专职会话并入参谋长、参谋长获回流执行权、元信息同步从三方接力简化为两方接力 | agent-workflow `cross-project-collaboration.md` §生态参与者与跨界协议（四类参与者→三类+场所、字段级白名单矩阵、两方接力）、`README.md` 定位段升级；下游同步 | 已回流下游 | Owner 两轮 review 通过，方案 v3 已定稿；已采纳；落地按 spec §4 九步执行（新身份先于新权限生效）；spec 见 agent-workflow `docs/superpowers/specs/2026-07-03-org-positioning-upgrade-design.md`（commit `b108ea6`） | `4ec68ce`（merge，feat `2de5947`） | ai: 已回流（`2acc305`, 2026-07-03）；xiaobao: 已回流（`107d879`, 2026-07-03）；workboard: 已回流（`9cd17cf`, 2026-07-03） | 自举型，同 BCR-005 先例；矩阵连带修订：框架真源可登记自身元信息变更行 |
 | BCR-008 | 参谋长（生态根会话）· Owner 授权代提，2026-07-04 | BCR-007 回流时手动 `cp` 复制 README.md 绕过 `sync-downstream.sh`，把三下游各自 README 覆盖为 agent-workflow 真源 README（脚本本身不同步 README） | 根治优先机制护栏（`sync-downstream.sh` 回流自检兜底，不加条文）；下游影响：xiaobao / ai / workboard 的 `README.md` | 已提报 | 待 Owner + 真源会话评估 | — | 待落地后处理；下游 README 恢复锚点 xiaobao@`635d558` / ai@`0ee6c9a` / workboard@`b5b18d9` | 证据：三下游 README 覆盖 commit = BCR-007 三回流 commit（xiaobao `107d879` / ai `2acc305` / workboard `9cd17cf`） |
 | BCR-009 | 参谋长（生态根会话）· Owner 拍板，2026-07-04 | 组织定位微调：裁减独立 agent-workflow 维护角色，框架维护权 + 回流执行权归参谋长（身份挂靠、非目录合并）；回流定为半自动收尾，全自动留未来 | 参谋长职责扩含框架维护；agent-workflow 参与者「独立 General 会话」→「参谋长第二工作目录」；「谁能写什么」矩阵参谋长写权扩到 baseline/templates/入口；根 `CLAUDE.md` 参谋长职责表 | 已提报 | 待 Owner 定落地节奏 | — | 落地后回流下游 | 自举型，同 BCR-007；**前置依赖 BCR-008 护栏先行**；全自动留未来的依据 = 组织法则三「半自动是设计选择」 |
+| BCR-010 | 参谋长（生态根会话）· Owner 拍板，2026-07-04 | 跨项目定位禁相对路径→绝对路径写死→换机器/上生产即失效（xiaobao/ai 的 `coordination_root`=`/root/Project/...` 已失效）；放开为「显式相对路径（项目根为基准），仍禁无配置猜测」 | agent-workflow `cross-project-collaboration.md` §coordination 发现机制；下游各项目 `coordination_root` 改相对 | 已提报 | 待参谋长落地（框架维护权 BCR-009） | — | 落地后随 BCR-009 一并回流下游 | 下游修复：xiaobao/ai 的 `coordination_root` 改 `../niuma-cheng-coordination`（归各项目会话）；workboard 已用相对路径未坏 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -247,4 +248,25 @@
 - 前置依赖：**BCR-008 回流护栏先落地**（半自动/自动回流前，护栏兜底防错误扩散）。
 - 自举落地排序：同 BCR-007「新身份先于新权限生效」——先在文档确立参谋长的框架维护身份，再据此由参谋长落地其余改动。
 - 状态：已提报，待 Owner 定落地节奏（现在落地 or 先留提案）；本 BCR 自举，落地由参谋长承接。
+
+---
+
+## BCR-010 · 跨项目定位改显式相对路径（禁绝对写死）
+
+- 提出方：参谋长（生态根会话）· Owner 拍板 2026-07-04。
+- 现象：xiaobao / ai 的 `docs/baseline/project-context.md` `coordination_root` 写死绝对路径 `/root/Project/niuma-cheng-coordination`，而实际树已在 `/Users/ck/Project/niuma-cheng/`——路径失效；workboard 用相对 `../niuma-cheng-coordination` 未坏。**印证绝对路径不可移植、整棵树搬家即失效**。
+- 根因两层：
+  1. 配置层：xiaobao/ai 的 `coordination_root` 写死绝对路径；
+  2. 规则层：baseline §「coordination 仓的发现」明文**禁止** sibling/相对路径（理由「换机器即错」），把可移植的相对路径也堵死了——该理由只对「非统一树」成立，对 niuma-cheng（`setup.sh` 强制兄弟树）恰恰相反。
+- 方案（Owner 拍板 · 显式相对，非自动推导）：
+  - baseline 放开：`coordination_root` 允许绝对 / URL / **相对项目根的相对路径**；统一兄弟树生态优先相对；相对以项目根（`git rev-parse --show-toplevel`）为基准。
+  - **仍禁无配置的目录猜测**（显式相对 ≠ 运行时扫上级找同级）——保住「不靠猜」。
+- 双侧修复：
+  - **根治（参谋长落地）**：改 `cross-project-collaboration.md` §发现机制 + 随 BCR-009 回流各下游。
+  - **影响修复（各项目会话）**：xiaobao / ai 的 `coordination_root` 改 `../niuma-cheng-coordination`；workboard 已合规。
+- 落地：参谋长以框架维护权（BCR-009）评估落地 baseline；下游配置改归各项目会话，挂本 BCR 修复清单。
+- 修复清单：
+  - [ ] baseline 发现机制放开（参谋长，改完随 BCR-009 回流）
+  - [ ] xiaobao `coordination_root` 改相对 —— 项目会话
+  - [ ] ai `coordination_root` 改相对 —— 项目会话
 

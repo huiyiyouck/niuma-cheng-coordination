@@ -83,6 +83,7 @@
 | BCR-006 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 删除 Tester（测试工程师）角色：接口/自动化测试并入 Developer 自测、手动验收由 Owner、取消独立 Tester Review 门禁（Owner 验收升为强制关闭门禁） | agent-workflow `role-tester.md`（删）、`multi-agent-workflow.md`（角色集/流水线/Review 矩阵/关闭检查）、`runtime.md`、入口 `CLAUDE.md`/`AGENTS.md`、`mechanisms.md`、`standard-iteration-quick.md`、模板 `test-report.md`；下游各项目 | 已回流下游 | 已采纳（设计 v3 经 3 轮 review + Owner 拍 8 点）并落地：Tester 删除，接口/自动化测试并入 Developer 自测、手动验收由 Owner（强制关闭门禁）、验收/回归复核由 Architect 或 DevOps、`test-plan` 墓碑 / `test-report`→自测报告；baseline 合 main（PR #8，merge `6f433ca`），下游已回流 = 终态 | `6f433ca`（merge PR #8） | ai `504f7c3` / xiaobao `9bab45d` / workboard `d8e6b74` | 与 BCR-004（删 UI）同类「角色集精简」，合并一份方案/落地 spec |
 | BCR-007 | agent-workflow · General（真源会话，Owner 驱动 2026-07-03） | 组织架构定位升级：生态参与者拓扑修订为「指挥官—参谋长制（薄公司）」——撤销 coordination 专职会话并入参谋长、参谋长获回流执行权、元信息同步从三方接力简化为两方接力 | agent-workflow `cross-project-collaboration.md` §生态参与者与跨界协议（四类参与者→三类+场所、字段级白名单矩阵、两方接力）、`README.md` 定位段升级；下游同步 | 已回流下游 | Owner 两轮 review 通过，方案 v3 已定稿；已采纳；落地按 spec §4 九步执行（新身份先于新权限生效）；spec 见 agent-workflow `docs/superpowers/specs/2026-07-03-org-positioning-upgrade-design.md`（commit `b108ea6`） | `4ec68ce`（merge，feat `2de5947`） | ai: 已回流（`2acc305`, 2026-07-03）；xiaobao: 已回流（`107d879`, 2026-07-03）；workboard: 已回流（`9cd17cf`, 2026-07-03） | 自举型，同 BCR-005 先例；矩阵连带修订：框架真源可登记自身元信息变更行 |
 | BCR-008 | 参谋长（生态根会话）· Owner 授权代提，2026-07-04 | BCR-007 回流时手动 `cp` 复制 README.md 绕过 `sync-downstream.sh`，把三下游各自 README 覆盖为 agent-workflow 真源 README（脚本本身不同步 README） | 根治优先机制护栏（`sync-downstream.sh` 回流自检兜底，不加条文）；下游影响：xiaobao / ai / workboard 的 `README.md` | 已提报 | 待 Owner + 真源会话评估 | — | 待落地后处理；下游 README 恢复锚点 xiaobao@`635d558` / ai@`0ee6c9a` / workboard@`b5b18d9` | 证据：三下游 README 覆盖 commit = BCR-007 三回流 commit（xiaobao `107d879` / ai `2acc305` / workboard `9cd17cf`） |
+| BCR-009 | 参谋长（生态根会话）· Owner 拍板，2026-07-04 | 组织定位微调：裁减独立 agent-workflow 维护角色，框架维护权 + 回流执行权归参谋长（身份挂靠、非目录合并）；回流定为半自动收尾，全自动留未来 | 参谋长职责扩含框架维护；agent-workflow 参与者「独立 General 会话」→「参谋长第二工作目录」；「谁能写什么」矩阵参谋长写权扩到 baseline/templates/入口；根 `CLAUDE.md` 参谋长职责表 | 已提报 | 待 Owner 定落地节奏 | — | 落地后回流下游 | 自举型，同 BCR-007；**前置依赖 BCR-008 护栏先行**；全自动留未来的依据 = 组织法则三「半自动是设计选择」 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -227,4 +228,23 @@
   - [ ] ai README 恢复 —— PM 承接
   - [ ] workboard README 恢复 —— PM 承接
   - [ ] agent-workflow 回流护栏落地 + 回流下游 —— 真源会话
+
+---
+
+## BCR-009 · 框架维护权与回流权归参谋长（裁减独立 workflow 维护角色）
+
+- 提出方：参谋长（生态根会话）· Owner 拍板 2026-07-04；自举型，同 BCR-005/007。
+- 背景：BCR-007 刚把回流执行权给参谋长；本 BCR 顺势把 agent-workflow 的**框架维护**也收归参谋长——让「把控部门的人」一手持有制度制定权（SOP 真源），并让「改框架的人顺手回流」少一环。设计经 Owner × 参谋长碰撞定案。
+- 核心变更：
+  1. **裁角色 · 身份挂靠**（非目录合并）：取消「独立 agent-workflow 维护会话（General）」，框架维护身份改挂**参谋长**。参谋长 `cd` 进 agent-workflow 目录即以**参谋长身份**维护 `docs/baseline`/`docs/templates`/入口、在该目录 commit。**守住「结构跟着物理走」**：仍在 agent-workflow 目录操作，不在生态根跨仓手写——是「一个头衔、两个目录」，非「一个会话塞两个仓」。
+  2. **回流半自动收尾**：参谋长改完 baseline 合 main 后，收尾接着跑 `sync-downstream.sh` + 逐仓 commit/push + 回填 BCR 回流清单（改的人顺手回流）。
+  3. **全自动留未来**：CI/hook 全自动回流挂为未来升级项，依据组织法则三「半自动是设计选择而非缺陷，全自动留下次定位升级」；升级前置 = BCR-008 护栏跑稳 + 下游数量增长。
+- 影响 / 待落地：
+  - 参谋长职责：从「协调＋立项＋回流执行＋索引」扩为「＋ 框架真源维护」；由「薄协调层」变「协调＋框架研发」一肩挑（**Owner 已认领此代价**，正向裁剪）。
+  - agent-workflow 参与者定义：「独立 General 维护会话」→「参谋长第二工作目录」。
+  - BCR 承接：下游 BCR 提报后由参谋长评估＋改真源＋回流（原「真源会话评估」并入参谋长）；含 BCR-008 护栏落地随之归参谋长。
+  - 待改文件：agent-workflow `docs/baseline/cross-project-collaboration.md`（参与者拓扑 /「谁能写什么」矩阵）、`README.md` 定位段、agent-workflow `CLAUDE.md` 自述（真源会话→参谋长）、根 `CLAUDE.md` 参谋长职责表。
+- 前置依赖：**BCR-008 回流护栏先落地**（半自动/自动回流前，护栏兜底防错误扩散）。
+- 自举落地排序：同 BCR-007「新身份先于新权限生效」——先在文档确立参谋长的框架维护身份，再据此由参谋长落地其余改动。
+- 状态：已提报，待 Owner 定落地节奏（现在落地 or 先留提案）；本 BCR 自举，落地由参谋长承接。
 

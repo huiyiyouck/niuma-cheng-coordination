@@ -82,6 +82,7 @@
 | BCR-005 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 生态参与者拓扑 + 跨界写协议（直写 vs 转交）：把 coordination / 根索引 / 框架真源等非开发参与者系统定义进工作流，消除「Owner 人肉转述」缺口 | agent-workflow `cross-project-collaboration.md` 新增「生态参与者与跨界协议」节；下游同步 | 已回流下游 | 真源会话评估·已采纳（4 轮 review 定稿）：设计 v1，四类参与者（框架真源/协调真源/开发型下游/生态索引根）+ 跨界写协议三条 + 「谁能写什么」矩阵。设计草案见 agent-workflow `docs/progress/ad-hoc/2026-06-25-bcr-005-ecosystem-participant-topology.md`（`1045c9d`，分支 `fix/source-repo-bcr-no-role-switch`，未合 main）。合并定稿 spec v4 `fec6135`；baseline 已落地分支 `b8c7c15`（自检过）；已合 main（merge `66c1e1a` / PR #7）= 已落地真源；下游已回流 = 终态 | `66c1e1a`（merge PR #7） | ai `6b1c8b8` / xiaobao `2e41947` / workboard `4b8e563` | 父框架：收编 BCR-003（元信息同步）+ 根 CLAUDE.md 重设计 + 「授权直写 vs 人肉转述」缺口（回归用例 `748dc22`→`58de4eb`） |
 | BCR-006 | agent-workflow · General（真源会话，Owner 驱动 2026-06-25） | 删除 Tester（测试工程师）角色：接口/自动化测试并入 Developer 自测、手动验收由 Owner、取消独立 Tester Review 门禁（Owner 验收升为强制关闭门禁） | agent-workflow `role-tester.md`（删）、`multi-agent-workflow.md`（角色集/流水线/Review 矩阵/关闭检查）、`runtime.md`、入口 `CLAUDE.md`/`AGENTS.md`、`mechanisms.md`、`standard-iteration-quick.md`、模板 `test-report.md`；下游各项目 | 已回流下游 | 已采纳（设计 v3 经 3 轮 review + Owner 拍 8 点）并落地：Tester 删除，接口/自动化测试并入 Developer 自测、手动验收由 Owner（强制关闭门禁）、验收/回归复核由 Architect 或 DevOps、`test-plan` 墓碑 / `test-report`→自测报告；baseline 合 main（PR #8，merge `6f433ca`），下游已回流 = 终态 | `6f433ca`（merge PR #8） | ai `504f7c3` / xiaobao `9bab45d` / workboard `d8e6b74` | 与 BCR-004（删 UI）同类「角色集精简」，合并一份方案/落地 spec |
 | BCR-007 | agent-workflow · General（真源会话，Owner 驱动 2026-07-03） | 组织架构定位升级：生态参与者拓扑修订为「指挥官—参谋长制（薄公司）」——撤销 coordination 专职会话并入参谋长、参谋长获回流执行权、元信息同步从三方接力简化为两方接力 | agent-workflow `cross-project-collaboration.md` §生态参与者与跨界协议（四类参与者→三类+场所、字段级白名单矩阵、两方接力）、`README.md` 定位段升级；下游同步 | 已回流下游 | Owner 两轮 review 通过，方案 v3 已定稿；已采纳；落地按 spec §4 九步执行（新身份先于新权限生效）；spec 见 agent-workflow `docs/superpowers/specs/2026-07-03-org-positioning-upgrade-design.md`（commit `b108ea6`） | `4ec68ce`（merge，feat `2de5947`） | ai: 已回流（`2acc305`, 2026-07-03）；xiaobao: 已回流（`107d879`, 2026-07-03）；workboard: 已回流（`9cd17cf`, 2026-07-03） | 自举型，同 BCR-005 先例；矩阵连带修订：框架真源可登记自身元信息变更行 |
+| BCR-008 | 参谋长（生态根会话）· Owner 授权代提，2026-07-04 | BCR-007 回流时手动 `cp` 复制 README.md 绕过 `sync-downstream.sh`，把三下游各自 README 覆盖为 agent-workflow 真源 README（脚本本身不同步 README） | 回流操作纪律 + 可选护栏（agent-workflow `regression-cases.md`）；下游影响：xiaobao / ai / workboard 的 `README.md` | 已提报 | 待 Owner + 真源会话评估 | — | 待落地后处理；下游 README 恢复锚点 xiaobao@`635d558` / ai@`0ee6c9a` / workboard@`b5b18d9` | 证据：三下游 README 覆盖 commit = BCR-007 三回流 commit（xiaobao `107d879` / ai `2acc305` / workboard `9cd17cf`） |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -198,4 +199,26 @@
   - `README.md`：加内部架构定位段（指挥官—参谋长制·薄公司）
 - 回流范围：ai / xiaobao / workboard 三下游（均已接入 agent-workflow）
 - 回流完成：ai `2acc305` / xiaobao `107d879` / workboard `9cd17cf`（2026-07-03），BCR-007 置「已回流下游」终态
+
+---
+
+## BCR-008 · 回流误带 README（手动 cp 绕过 sync 脚本）
+
+- 提出方：参谋长（生态根会话）· Owner 授权代提，2026-07-04
+- 现象：三个下游 `xiaobao` / `ai` / `workboard` 的 `README.md` 被整体覆盖为 agent-workflow 真源的 README（一字不差，且保留了「本仓库性质 / 真源仓库 / single source of truth」段），各自项目自述丢失。
+- 根因（提报方观察，待真源确认）：
+  - `sync-downstream.sh` **不同步 README.md** —— 框架文件仅 `CLAUDE.md`/`AGENTS.md`（对入口还 `strip_block` 剥离 SOURCE-REPO-ONLY）+ `docs/baseline/`（除 `project-context.md`）+ `docs/templates/`；脚本另有「目标工作区不干净则拒绝同步」保护。
+  - 但三下游 README 被**原样整体覆盖、SOURCE-REPO-ONLY 段完整保留**（若经脚本必被 strip）→ 不可能是脚本所为，只能是 BCR-007 回流时**手动 `cp` 复制**了 README（BCR-007 影响域含「agent-workflow `README.md` 定位段升级」，操作者顺手把 README 也带到了下游），**绕过了 `sync-downstream.sh`**。
+  - 违反纪律：参谋长职责③「只准经 `sync-downstream.sh` 同步框架文件，**禁止手改下游任何文件**」。
+- 证据：三下游 README 覆盖 commit = BCR-007 三个回流 commit（xiaobao `107d879` / ai `2acc305` / workboard `9cd17cf`）；coordination README 未被波及（本仓不在 sync 回流对象内）。
+- 双侧修复（一条 BCR 覆盖）：
+  - **根治侧（agent-workflow 真源 + 回流纪律，供真源评估，非定稿）**：
+    - 明确回流只能经 `sync-downstream.sh`，禁止任何手动 `cp` 绕过；README / 项目专属文件永不进回流范围。
+    - 可选护栏：回流后自检 —— sync commit 改动的下游文件必须都在框架白名单内，否则告警；或在 `docs/regression-cases.md` 增加一条回归用例「回流不得改动下游 README 等项目专属文件」，把纪律固化成回归测试。
+  - **影响修复侧（各下游恢复自己的 README，挂本 BCR 修复清单）**：
+    - xiaobao：`git checkout 635d558 -- README.md`
+    - ai：`git checkout 0ee6c9a -- README.md`
+    - workboard：`git checkout b5b18d9 -- README.md`
+    - 执行方：各下游会话，或 Owner 授权参谋长破例统一恢复。
+- 落地由 Owner + agent-workflow 真源会话评估；下游 README 恢复随本 BCR 修复清单跟踪至闭合。
 

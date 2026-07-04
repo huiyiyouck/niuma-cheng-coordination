@@ -5,7 +5,7 @@
 - 定位：REQ-001 被承接之后的协作与联调沟通
 - 契约真源：[../contracts/news-l1.md](../contracts/news-l1.md)；库内检索反向接口见 [../contracts/kb-search.md](../contracts/kb-search.md)
 - 当前状态入口：[../STATUS.md#news-l1-contract](../STATUS.md)
-- 最近更新：2026-07-01
+- 最近更新：2026-07-04
 
 ## 关系概述
 
@@ -27,6 +27,30 @@
 ## 联调沟通
 
 > 承接后的接口对接 / 字段对齐 / 调试 / 版本跟进，倒序排列，条目标注所属需求 id。
+
+### 2026-07-04 · [REQ-001] 端到端联调完成，news-l1 主链路 + KB 双向调用全量验证通过
+
+- **双方角色**：ai 侧 PM（ck）起草 + xiaobao Developer（ck）补充 run 数据与结论确认；Owner（ck）已在 xiaobao 前端 `/debug/ai` 抽样验收通过。
+- **背景**：继 2026-07-01 联调验证通过后，Owner 完成最终端到端全量验收，联调闭环。
+- **联调范围**：
+  1. xiaobao → ai `POST /v1/runs/news-l1` 主链路（库内新闻 → 真实 L1Input 构造 → ai 处理 → 返回结果）
+  2. ai → xiaobao `POST /v1/kb-search` 主动库内检索（命中用例 + 空结果用例）
+  3. `tool_summary` 统计口径（预取不计入、ai 主动调用才计数）
+  4. 降级语义（KB 失败不阻塞主流程，整体仍 succeeded）
+- **xiaobao 侧补充数据**：
+  - 端到端主链路成功用例数：**4 条**（公网端到端 / 内网直连 / KB 命中 / KB 空结果各 1 条）
+  - 代表性 run_id（xiaobao→ai 公网端到端）：`run_7e626cf5f391`（status=succeeded，公网 nginx 反代）
+  - 代表性 run_id（xiaobao→ai 内网直连）：`run_2a4dbc15f308`（status=succeeded，elapsed_ms=73601，预填 search_summary 场景，tool_summary 全 0 符合口径）
+  - 代表性 run_id（ai→xiaobao KB 命中）：`run_2e0072cba2a3`（status=succeeded，tool_summary.kb_search=1，无 degraded:kb_search_failed）
+  - 单条耗时范围：**73601 ~ 79000 ms**（约 74~79s，较 6 月底 104s 优化约 25-30%）
+  - 四维评分 / 五类标签 / 摘要 / 翻译产出是否符合预期：**是**。返回包含完整四维评分（时效/影响/可信/清晰，各 0-5 分 + reason）、五类标签（含 processing 引擎标识）、中文摘要、分析等，与 `contracts/news-l1.md` v1 契约一致。
+  - KB 空结果语义（`results: []`）是否仍标 `degraded:kb_search_failed`：**是，仍标为 `degraded:kb_search_failed`**，ai 侧尚未优化。这是已知遗留项（2026-07-01 已记录），不阻塞主链路与关闭。
+  - 是否发现新问题：**未发现新问题**。所有问题均为 7 月 1 日已记录的已知项。
+- **xiaobao 侧配置确认**：
+  - `AI_HUB_BASE_URL` = `http://127.0.0.1:8100`（测试环境，同机）
+  - `AI_HUB_API_TOKEN` 已配置（测试环境鉴权未启用，留空也可通）
+  - xiaobao 测试环境 KB 接口 `POST http://127.0.0.1:8001/v1/kb-search` 已就绪，未设 admin token 鉴权
+- **当前结论（已确认）**：`news-l1` v1 契约不变，端到端联调通过，REQ-001 可进入验收关闭。
 
 ### 2026-07-01 · [REQ-001] xiaobao 测试环境已部署，双向联调验证通过；KB 空结果语义待 ai 优化
 
@@ -136,5 +160,5 @@
 | ai 配置 git remote 并 Bootstrap 团队工作流 | Owner / ai 会话 | 已完成（2026-06-21，见 [../STATUS.md#ai-bootstrap](../STATUS.md)） |
 | REQ-001 承接留痕补登 | ai PM/Architect | 已完成（2026-06-22，ai PM ck 承接） |
 | REQ-001 news-l1 小批量观察 | xiaobao Developer | 进行中 |
-| ai news-l1 库内检索 KB search 能力需 xiaobao 提供（link/web 已由 ai 自抓 + Owner key 解决） | xiaobao（PM/Architect/Dev） | ✅ xiaobao 已实现 `POST /v1/kb-search`，契约见 `contracts/kb-search.md` v1；待 ai 侧联调调用 |
-| ai↔xiaobao news-l1 真实数据端到端联调：需 xiaobao 提供「选库内已有新闻 → 构造同样 `L1Input` 调 ai」的**联调触发入口**（与真实业务入口只差新闻来源） | xiaobao（PM/Dev） | ✅ xiaobao 已实现前端 `/debug/ai` 验收页 + 后端 `/v1/ai-debug/news-l1-runs`；待 ai 服务地址配置后真实验收 |
+| ai news-l1 库内检索 KB search 能力需 xiaobao 提供（link/web 已由 ai 自抓 + Owner key 解决） | xiaobao（PM/Architect/Dev）+ ai Developer | ✅ 已完成（2026-07-04）——xiaobao 已实现 `POST /v1/kb-search`，ai 侧已接入并联调通过；KB 空结果语义待优化（非阻塞） |
+| ai↔xiaobao news-l1 真实数据端到端联调：需 xiaobao 提供「选库内已有新闻 → 构造同样 `L1Input` 调 ai」的**联调触发入口**（与真实业务入口只差新闻来源） | xiaobao（PM/Dev）+ ai PM | ✅ 已完成（2026-07-04）——端到端主链路 + KB 双向调用全量验证通过，Owner 抽样验收通过；REQ-001 可进入验收关闭 |

@@ -3,7 +3,7 @@
 > 跨项目当前状态真源：各项目阶段、当前阻塞、谁等谁、下一步。
 > 单项目内部细节不在此展开，从「当前入口」链接回各项目 `docs/progress/INDEX.md`。
 > 跨项目需求池见 [REQUESTS.md](REQUESTS.md)（提报中心）。
-> 最近更新：2026-07-01（xiaobao 测试环境已部署 `/debug/ai`、`/v1/ai-debug/news-l1-runs`、`/v1/kb-search`；news-l1 主链路与 ai→xiaobao KB 命中用例已双向验证通过；KB 空结果语义待 ai 优化）。2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）。2026-06-29（ai 定位升级 decisions/0002；REQ-002 ai PM 承接；元信息台账 ai 定位变更 → PROJECTS + 生态根索引均已同步）
+> 最近更新：2026-07-04（REQ-001 news-l1 端到端联调完成，Owner 抽样验收通过，可进入关闭流程；KB 空结果语义待 ai 优化为已知遗留项，不阻塞）。2026-07-01（xiaobao 测试环境已部署 `/debug/ai`、`/v1/ai-debug/news-l1-runs`、`/v1/kb-search`；news-l1 主链路与 ai→xiaobao KB 命中用例已双向验证通过；KB 空结果语义待 ai 优化）。2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）
 
 ## 各项目当前状态
 
@@ -33,17 +33,17 @@
 <a name="news-l1-integration"></a>
 ### 3. news-l1 真实数据端到端联调
 
-- 状态：**双向联调主链路已验证通过**。ai 服务已部署测试环境 `http://127.0.0.1:8100`（`/health` 200）；xiaobao 已部署测试环境 `/debug/ai` + `POST /v1/ai-debug/news-l1-runs` + `POST /v1/kb-search`（契约 [contracts/kb-search.md](contracts/kb-search.md) v1）。xiaobao→ai 真实调用成功（run `run_2a4dbc15f308` succeeded）；ai→xiaobao KB 主动检索命中用例成功（run `run_2e0072cba2a3` succeeded，`tool_summary.kb_search=1`，无 KB 降级标签）。
-- 谁等谁：主链路不再互等。剩余待 ai 优化：当 xiaobao `POST /v1/kb-search` 返回 200 + `results: []` 时，当前 ai 会在成功响应的 `processing` 中追加 `degraded:kb_search_failed`；按契约应区分为空命中（建议 `kb_search_empty` 或不降级），不应标为工具失败。
-- 下一步责任：Owner 可在 xiaobao `/debug/ai` 页面继续做验收抽样；ai 优化 KB 空结果语义和查询词策略；xiaobao 维持测试服务与 `AI_HUB_BASE_URL=http://127.0.0.1:8100` 配置。**不改 news-l1 v1 契约**。证据见 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) 2026-07-01 最新条。
+- 状态：**✅ 端到端联调完成，Owner 抽样验收通过，可进入关闭流程**。ai 服务已部署测试环境 `http://127.0.0.1:8100`；xiaobao 已部署测试环境 `/debug/ai` + `POST /v1/ai-debug/news-l1-runs` + `POST /v1/kb-search`（契约 [contracts/kb-search.md](contracts/kb-search.md) v1）。4 条成功用例覆盖主链路、KB 命中、KB 空结果等场景；单条耗时 74~79s（较 6 月底优化约 25-30%）；四维评分/五类标签/摘要/翻译产出符合 v1 契约。
+- 谁等谁：**主链路与验收均不互等，可进入关闭**。剩余已知遗留项（非阻塞）：ai 侧 KB 空结果语义——当 xiaobao `POST /v1/kb-search` 返回 200 + `results: []` 时，ai 仍标 `degraded:kb_search_failed`，建议优化为 `kb_search_empty` 或不降级。
+- 下一步责任：ai 侧执行 v0.1 迭代关闭检查（联调证据已齐）；xiaobao 侧维持测试服务配置。**news-l1 v1 契约不变**。完整证据见 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) 2026-07-04 联调完成条。
 
 ## 下一步汇总
 
 1. ~~Owner：为 `niuma-cheng-ai` 配置 GitHub remote~~ —— 已完成（2026-06-21），`PROJECTS.md` 仓库地址已回填。
 2. ai 项目会话：PM 已承接 REQ-001；Owner 确认后由 PM 创建 `v0.1-prd.md` 启动标准迭代，实现 news-l1 真实 L1 处理（stub→真实）。
 3. 任一侧改 news-l1 契约：先改 `contracts/news-l1.md`，CHANGELOG 记一行。
-4. xiaobao 项目会话：已实现并部署 ai 2026-07-01 提的 news-l1 **联调触发入口**诉求，`/debug/ai` 可继续供 Owner 抽样验收（见 communications/REQ-001 2026-07-01 条）。
-5. ai 项目会话：优化 KB 空结果语义，避免把 `POST /v1/kb-search` 的 200 + `results: []` 标成 `degraded:kb_search_failed`。
+4. xiaobao 项目会话：联调证据已齐，维持测试服务配置待命。
+5. ai 项目会话：执行 v0.1 迭代关闭检查（联调证据已齐）；后续优化 KB 空结果语义（非阻塞，可入 v0.2 或独立任务）。
 
 ## 元信息变更台账
 

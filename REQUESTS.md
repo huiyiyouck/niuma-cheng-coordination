@@ -13,6 +13,7 @@
 |---------|--------|------|--------|----------|------|----------|
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（已关闭，2026-07-04） | 已关闭 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
 | REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，待启动） | 已承接 | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
+| REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：翻译职责从 ai 剥离到 xiaobao（ai 不再做翻译）+ AI 解析从 HTTP 同步改数据库契约边界异步解耦（ai 改轮询 worker + 适配层封装） | 待 ai · PM 评估承接 | — | 已提报 | 待承接后建立 |
 
 ---
 
@@ -272,3 +273,68 @@
   - [x] xiaobao `coordination_root` 改相对 `aa28883`
   - [x] ai `coordination_root` 改相对 `1b2e699`
 
+
+
+---
+
+## REQ-003 · v0.6.1 集成模式变更（翻译剥离 + 数据库契约边界）
+
+- 提出方：xiaobao · PM
+- 提报日期：2026-07-05
+- 关联迭代：xiaobao v0.6.1（[v0.6.1-prd.md](../niuma-cheng-xiaobao/docs/progress/iterations/v0.6.1-prd.md) R1 已产出，待 Review）
+- 当前状态：已提报，待 ai · PM 评估承接
+
+### 背景
+
+xiaobao v0.6 上线了 AI 处理能力（默认关闭），采用 HTTP 同步调用模式（契约 [news-l1 v1](contracts/news-l1.md)），单条处理耗时 74~79 秒，调用方需挂起等待，且重试、超时、解耦能力弱。同时翻译作为 L1 输出的一部分由 ai 承担，但翻译是「看得懂」的基础门槛能力，跟 AI 深度解析（评分/摘要/标签/上下文）的定位有差异。
+
+v0.6.1 决定：
+1. **翻译职责剥离**：翻译从 ai 中枢剥离到 xiaobao 侧，由 xiaobao 调第三方翻译 API 自管，ai 不再做翻译
+2. **AI 解析集成模式变更**：ai 深度解析从 HTTP 同步调用改为数据库契约边界异步解耦，xiaobao 入库标记状态 → ai 轮询取数处理 → 写回数据库
+
+### 变更内容（请 ai 承接的两件事）
+
+#### 变更 1：ai 不再做翻译
+
+- ai 中枢移除翻译职责，原 REQ-001 中「翻译」输出字段不再由 ai 产出
+- 翻译相关数据层完全由 xiaobao 管理（新增 `translations` 表，三层入库架构：raw_items → translations → processed_news）
+- ai 侧处理输入应为「翻译完成后的中文内容」（若原文是外文），ai 专注做深度解析（评分/摘要/标签/上下文）
+- 翻译失败时 ai 仍可基于原文做解析（不阻塞）
+
+#### 变更 2：AI 解析集成模式从 HTTP 改数据库契约边界
+
+- ai 服务从「HTTP 服务等请求」改为「轮询 worker 模式」：定期从共享数据库取 `pending_ai` 状态的任务，处理完写回
+- ai 侧需新增**数据源适配层**：把「从 xiaobao 库取数」封装为独立适配层，AI 处理核心不感知数据是从数据库来还是从 HTTP 请求来
+- 此要求源自 [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)（ai 生态定位为多调用方预留），ai 直连 xiaobao 库读 schema 会把 ai 焊死在 xiaobao 上，必须用适配层隔离
+
+### ai 侧需做的工作
+
+1. **架构改造**：HTTP 服务模式 → 轮询 worker 模式
+2. **适配层封装**：数据获取逻辑独立分层，处理核心不感知取数方式
+3. **翻译职责剥离**：移除 L1 处理流程中的翻译步骤（输入改为已翻译的中文内容）
+4. **承接新契约**：待 xiaobao 侧的数据库边界契约（表、字段、状态枚举、读写权属）出稿后，ai 侧按契约实现
+5. **保留灰度能力**：支持 HTTP 模式与数据库模式切换的配置开关，便于灰度验证和回滚
+
+### 边界与衔接
+
+- **契约变更**：本变更涉及 [news-l1](contracts/news-l1.md) 契约重大修订，xiaobao 侧将在 coordination `contracts/` 下新建数据库边界契约（v0.6.1 PRD R1 已纳入前置依赖 AC-15），CHANGELOG 记一行
+- **schema 权属**：共享库 schema 归 xiaobao 所有，ai 只能读指定待处理表、写回指定结果字段，不得建表改表
+- **与 REQ-001 的关系**：REQ-001 已关闭（ai v0.1 已交付 HTTP 模式 + 翻译），本 REQ 是其后继变更，ai 侧需在下一个迭代中承接
+- **与 REQ-002 的关系**：REQ-002 架构调研结论若与本变更有关联，由 ai PM 自行判断是否合入本 REQ 的承接迭代
+- **多调用方定位**：本变更要求 ai 做适配层封装正是为了保住 decisions/0002 的多调用方定位，不与此决策冲突
+
+### xiaobao 侧的前置产出（ai 承接前需等待）
+
+1. v0.6.1 PRD R1 Review 通过、定稿（含三层入库架构和状态机）
+2. coordination `contracts/` 下数据库边界契约出稿（表、字段、状态枚举、读写权属、卡死回收阈值约定）
+3. xiaobao 侧 `translations` 表结构设计完成（Architect 阶段产出）
+
+### 联调预期
+
+- ai 侧改造完成后，xiaobao 与 ai 在共享数据库上做端到端联调
+- 联调用例覆盖：正常解析路径 / 解析失败重试 / 卡死回收 / 翻译失败仍可解析 / ai 服务不可用时 xiaobao 不阻塞
+- Owner 验收通过后切换灰度开关
+
+### 沟通文档
+
+待 ai · PM 评估承接后建立 `communications/REQ-003-db-boundary-and-translation-extraction.md`。

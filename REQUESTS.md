@@ -13,7 +13,7 @@
 |---------|--------|------|--------|----------|------|----------|
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（已关闭，2026-07-04） | 已关闭 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
 | REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，待启动） | 已承接 | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
-| REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：翻译职责从 ai 剥离到 xiaobao（ai 不再做翻译）+ AI 解析从 HTTP 同步改数据库契约边界异步解耦（ai 改轮询 worker + 适配层封装） | 待 ai · PM 评估承接 | — | 已提报 | 待承接后建立 |
+| REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker 模式 + 适配层封装），翻译保留在 ai 侧 | 待 ai · PM 评估承接 | — | 已提报（2026-07-05 初版，2026-07-12 R2 更新） | [contracts/news-l1-db.md](contracts/news-l1-db.md) |
 
 ---
 
@@ -88,7 +88,7 @@
 | BCR-010 | 参谋长（生态根会话）· Owner 拍板，2026-07-04 | 跨项目定位禁相对路径→绝对路径写死→换机器/上生产即失效（xiaobao/ai 的 `coordination_root`=`/root/Project/...` 已失效）；放开为「显式相对路径（项目根为基准），仍禁无配置猜测」 | agent-workflow `cross-project-collaboration.md` §coordination 发现机制；下游各项目 `coordination_root` 改相对 | 已回流下游（终态） | 参谋长落地（框架维护权 BCR-009） | `1d1f935` | baseline: ai `cbdea27` / xiaobao `7e97465` / workboard `e240db0`；`coordination_root` 改相对：xiaobao `aa28883` / ai `1b2e699`，workboard 无需 | 下游修复：xiaobao/ai 的 `coordination_root` 改 `../niuma-cheng-coordination`（归各项目会话）；workboard 已用相对路径未坏 |
 | BCR-011 | workboard · Developer（2026-07-05） | 迭代记录「阶段状态」无标准词表，门禁表结构约定缺失：各项目历史记录写法各异（已定稿 / 部署通过 / 已Review / ✅ 验收通过 / 已跳过…），且有非阶段性内容（如「UI 增强方向」）以三级标题混入阶段门禁区——下游工具（workboard 迭代时间轴）与流程审计只能读取侧逐版本兼容。建议：① `iteration.md` 模板定义封闭状态枚举（如：未开始 / 进行中 / Review中 / 待修正 / 已定稿 / 已完成 / 已跳过）并注明门禁表最新轮次置末行；② 约定「## 阶段门禁」下三级标题只放标准阶段，停放性记录（讨论记录 / 未来方向）移出门禁区或走 ad-hoc | agent-workflow `docs/templates/iteration.md`；或另涉 `standard-iteration-quick.md` 门禁表述；回流后约束各下游**新**迭代记录写法 | 已回流下游 | 参谋长评估：采纳。采用既有 baseline 阶段门禁词表 `待Review / Review中 / 修改中 / 已定稿 / 阻塞 / 已跳过`，不采用提案中跨层级的 `未开始/进行中/已完成`；在 `iteration.md` 模板补状态枚举、部署检查独立枚举、最新轮次置末行、门禁区只放标准阶段。方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-08-bcr-011-012-iteration-gate-spec.md` | `39e7a35` | ai `a53b680` / xiaobao `4dbbddb` / workboard `ad9b706`（2026-07-08） | 与 BCR-012 合并同轮落地；历史迭代记录不回改，仅约束新迭代记录 |
 | BCR-012 | workboard · Developer（2026-07-07） | `iteration.md` 模板未随 BCR-004（删 UI 阶段）/ BCR-006（删测试阶段）同步收敛「阶段门禁」的阶段字段集——模板与历史记录里仍保留「测试阶段」「UI 方案阶段」小节，与当前标准流水线（PRD → 设计 → 实现 → 部署就绪检查 → 迭代关闭）不符，下游工具（workboard 时间轴）只能在读取侧把它们降级为「附加记录」兼容。建议：`iteration.md` 模板固定当前标准阶段字段集，**显式删除「测试阶段」「UI 方案阶段」小节**（或保留但字段置空 + 注释「BCR-006 已并入 Developer 自测 / BCR-004 已并入 PRD」），使新迭代记录门禁结构统一、下游可确定性解析、无需逐版本兼容 | agent-workflow `docs/templates/iteration.md`（`## 阶段门禁` 阶段小节）；连带 `standard-iteration-quick.md` 阶段列举；回流后约束下游**新**迭代记录写法 | 已回流下游 | 参谋长评估：部分采纳。当前 `iteration.md` 已无「测试阶段 / UI 方案阶段」小节，原问题描述在现行 main 不复现；采纳其“固定标准阶段字段集”方向，并入 BCR-011 同轮落地，同时清理 `role-architect.md` 中残留 UI 阶段检查口径。方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-08-bcr-011-012-iteration-gate-spec.md` | `39e7a35` | ai `a53b680` / xiaobao `4dbbddb` / workboard `ad9b706`（2026-07-08） | 与 BCR-011 合并同轮落地；历史迭代记录不回改；采纳性质为部分采纳 |
-| BCR-013 | workboard · PM（2026-07-12） | 工作流会话未携带结构化「角色+迭代」标识，下游 workboard 精准匹配（会话↔角色↔迭代）只能靠启发式猜（首条「你是XX」+关键词加权，见 `session-meta.js`），信号稀疏（workboard Developer 预研：`vX.Y` 会话开头仅 3%、标题 0 次、全文 71% 但无法定位），`detected_role` 不稳、迭代归属几乎无信号，准确度天花板卡在会话源头 | agent-workflow 角色启动约定（`runtime.md`/入口/`role-*.md` 启动检查）或收尾机制（`mechanisms.md`）；下游 workboard 消费 | 部分采纳（迭代维进框架·待落地） | 参谋长初评经 Owner review 修订：建议**先走第 0 档**（workboard 纯解析侧扫已入库 assistant 消息、改进启发式探底，零框架改动——缺口未证实前不给框架加永久税）；若缺口显著再进框架，排序 **D 主力（落盘/审计原生）> C 待验证（启动写映射行+时间窗匹配，需验并发消歧）> B 增量（如实标注「高置信度启发式，非 1.0」）**。纠正初版硬伤：B 非确定性 1.0（信号源是 LLM 自述非用户输入）、C 不该枪毙（不依赖 session id，用时间戳）、D 不该贬辅。token 契约须含抗误命中（独占行强定界如 `<!-- wf-meta:… -->`）+ 确定性可正则。收尾级已收敛（Owner 二/三轮 review）：决策点分层（1 前置门，2–4 挂其下，5 可并行）；第 0 档收敛判据**拆角色/迭代两维各设门槛各判进框架**（不用复合"且"——迭代维信号存量近零会拖累够用的角色维）；很可能角色维交解析侧、迭代维进框架，则框架 marker 只承载迭代锚点、改动更小；并明确「D 服务审计不覆盖实时段，提报方实时诉求由第 0 档解析侧满足，BCR 关闭须写清归属」。**Owner 拍板（2026-07-12，采纳参谋长建议）：前置门=先走第 0 档探底、token 契约落点=coordination `contracts/`；决策点 ②B定性/③排序/④C复活 暂挂待探底数据。第 0 档归 workboard 解析侧迭代执行（改进 detectRole 扫已入库 assistant 消息，角色维报 Unknown 率、迭代维报迭代命中率，各对门槛[初值待定：角色维 Unknown ≤10% / 迭代维命中 ≥80%]各判是否进框架），非框架不占本 BCR 落地；参谋长待其数据回来复评。** **参谋长只读基线摸底（2026-07-12，59 会话）：角色维改进前 Unknown 头条 27.1% 但开发会话口径仅 ~7.5%（xiaobao 1/25、workboard 0/5，非开发会话本就应 Unknown）→ 近够用、大概率交解析侧；迭代维 vX.Y 首条 1.7%/全文 66.1%（合预研）→ 源头信号近零、大概率进框架。强烈印证两维分裂，方案结构经数据验证无需改，仅收紧角色维门槛口径（在开发会话上量）。Owner 可二选一：跑正式第0档确认 / 直接采信基线拍板分裂进迭代维 D/C。** **Owner 采信基线、按参谋长推荐拍板（2026-07-12，部分采纳）：角色维交 workboard 解析侧（不进框架、跳过正式第0档）；迭代维进框架。参谋长荐用方案 C（会话启动写"项目+角色+迭代+时间戳"映射行，覆盖进行中会话、直接解决 session↔迭代绑定；窄化到仅迭代维后 C 比总排序的 D 更贴合）。**角色维收尾（Owner 定）：detectRole 兜底 Unknown→General（无角色即 General，框架默认语义）→ 角色维零框架、无孤儿。** **参谋长补充（付框架税前 2 点）：① C 要真确定须靠 SessionStart hook（LLM 启动自写=同 B 的不确定）；② 迭代维可能免框架——会话时间戳×项目 INDEX.md git 历史可重建 session↔迭代（免疫会话不提 vX.Y、零永久税），建议先只读探这条解析侧路，达标则整条 BCR-013 零框架。契约落点改框架 baseline（参谋长黑名单不碰 contracts/）。** **迭代维解析侧探底结果（2026-07-12，只读59会话）：INDEX-git-history 重建 session↔迭代，开发角色会话命中 62.8%（27/43），未命中多为"当时无迭代/老会话"非算错；关键——框架 C 只能标未来新会话、这批历史积压一个都标不了→解析侧绕不开。参谋长改荐：迭代维也走解析侧→整条 BCR-013 零框架/零永久税/免回流，C 降备选（仅解析侧不足才上且须 hook）。待 Owner 确认翻转 C 采纳；确认后 BCR-013=评估后不进框架、转 workboard 解析侧治理（兜底 General + INDEX-git-history）。** 方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-12-bcr-013-session-role-iteration-marker.md` | — | — | 治本 workboard「会话↔角色↔迭代」精准匹配；workboard v0.2.1 做治标（软匹配：同角色置顶+可手选），本 BCR 治本留 workboard v0.3 收割；详情见下 |
+| BCR-013 | workboard · PM（2026-07-12） | 工作流会话未携带结构化「角色+迭代」标识，下游 workboard 精准匹配（会话↔角色↔迭代）只能靠启发式猜（首条「你是XX」+关键词加权，见 `session-meta.js`），信号稀疏（workboard Developer 预研：`vX.Y` 会话开头仅 3%、标题 0 次、全文 71% 但无法定位），`detected_role` 不稳、迭代归属几乎无信号，准确度天花板卡在会话源头 | agent-workflow 角色启动约定（`runtime.md`/入口/`role-*.md` 启动检查）或收尾机制（`mechanisms.md`）；下游 workboard 消费 | 评估关闭·不进框架（转 workboard 解析侧） | 参谋长初评经 Owner review 修订：建议**先走第 0 档**（workboard 纯解析侧扫已入库 assistant 消息、改进启发式探底，零框架改动——缺口未证实前不给框架加永久税）；若缺口显著再进框架，排序 **D 主力（落盘/审计原生）> C 待验证（启动写映射行+时间窗匹配，需验并发消歧）> B 增量（如实标注「高置信度启发式，非 1.0」）**。纠正初版硬伤：B 非确定性 1.0（信号源是 LLM 自述非用户输入）、C 不该枪毙（不依赖 session id，用时间戳）、D 不该贬辅。token 契约须含抗误命中（独占行强定界如 `<!-- wf-meta:… -->`）+ 确定性可正则。收尾级已收敛（Owner 二/三轮 review）：决策点分层（1 前置门，2–4 挂其下，5 可并行）；第 0 档收敛判据**拆角色/迭代两维各设门槛各判进框架**（不用复合"且"——迭代维信号存量近零会拖累够用的角色维）；很可能角色维交解析侧、迭代维进框架，则框架 marker 只承载迭代锚点、改动更小；并明确「D 服务审计不覆盖实时段，提报方实时诉求由第 0 档解析侧满足，BCR 关闭须写清归属」。**Owner 拍板（2026-07-12，采纳参谋长建议）：前置门=先走第 0 档探底、token 契约落点=coordination `contracts/`；决策点 ②B定性/③排序/④C复活 暂挂待探底数据。第 0 档归 workboard 解析侧迭代执行（改进 detectRole 扫已入库 assistant 消息，角色维报 Unknown 率、迭代维报迭代命中率，各对门槛[初值待定：角色维 Unknown ≤10% / 迭代维命中 ≥80%]各判是否进框架），非框架不占本 BCR 落地；参谋长待其数据回来复评。** **参谋长只读基线摸底（2026-07-12，59 会话）：角色维改进前 Unknown 头条 27.1% 但开发会话口径仅 ~7.5%（xiaobao 1/25、workboard 0/5，非开发会话本就应 Unknown）→ 近够用、大概率交解析侧；迭代维 vX.Y 首条 1.7%/全文 66.1%（合预研）→ 源头信号近零、大概率进框架。强烈印证两维分裂，方案结构经数据验证无需改，仅收紧角色维门槛口径（在开发会话上量）。Owner 可二选一：跑正式第0档确认 / 直接采信基线拍板分裂进迭代维 D/C。** **Owner 采信基线、按参谋长推荐拍板（2026-07-12，部分采纳）：角色维交 workboard 解析侧（不进框架、跳过正式第0档）；迭代维进框架。参谋长荐用方案 C（会话启动写"项目+角色+迭代+时间戳"映射行，覆盖进行中会话、直接解决 session↔迭代绑定；窄化到仅迭代维后 C 比总排序的 D 更贴合）。**角色维收尾（Owner 定）：detectRole 兜底 Unknown→General（无角色即 General，框架默认语义）→ 角色维零框架、无孤儿。** **参谋长补充（付框架税前 2 点）：① C 要真确定须靠 SessionStart hook（LLM 启动自写=同 B 的不确定）；② 迭代维可能免框架——会话时间戳×项目 INDEX.md git 历史可重建 session↔迭代（免疫会话不提 vX.Y、零永久税），建议先只读探这条解析侧路，达标则整条 BCR-013 零框架。契约落点改框架 baseline（参谋长黑名单不碰 contracts/）。** **迭代维解析侧探底结果（2026-07-12，只读59会话）：INDEX-git-history 重建 session↔迭代，开发角色会话命中 62.8%（27/43），未命中多为"当时无迭代/老会话"非算错；关键——框架 C 只能标未来新会话、这批历史积压一个都标不了→解析侧绕不开。参谋长改荐：迭代维也走解析侧→整条 BCR-013 零框架/零永久税/免回流，C 降备选（仅解析侧不足才上且须 hook）。待 Owner 确认翻转 C 采纳；确认后 BCR-013=评估后不进框架、转 workboard 解析侧治理（兜底 General + INDEX-git-history）。** **Owner 确认关闭（2026-07-12）：BCR-013 评估关闭·不进框架——两维转 workboard 解析侧治理（角色维 detectRole 兜底=General；迭代维 INDEX-git-history 重建），框架侧零改动、免回流、零永久税；C+hook 留档备选，仅解析侧将来证明不足才重启。** 方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-12-bcr-013-session-role-iteration-marker.md` | — | — | 治本 workboard「会话↔角色↔迭代」精准匹配；workboard v0.2.1 做治标（软匹配：同角色置顶+可手选），本 BCR 治本留 workboard v0.3 收割；详情见下 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -291,64 +291,65 @@
 - 落地：本提案仅提报，评估 · 采纳 · 落地由 Owner + 参谋长（框架维护权 BCR-009）。
 ---
 
-## REQ-003 · v0.6.1 集成模式变更（翻译剥离 + 数据库契约边界）
+## REQ-003 · v0.6.1 集成模式变更（数据库契约边界异步解耦）
 
 - 提出方：xiaobao · PM
-- 提报日期：2026-07-05
-- 关联迭代：xiaobao v0.6.1（[v0.6.1-prd.md](../niuma-cheng-xiaobao/docs/progress/iterations/v0.6.1-prd.md) R1 已产出，待 Review）
+- 提报日期：2026-07-05（初版）；2026-07-12（R2 更新）
+- 关联迭代：xiaobao v0.6.1（PRD R2 已定稿，设计 R2 PM 复审通过）
 - 当前状态：已提报，待 ai · PM 评估承接
+- 数据库边界契约：[contracts/news-l1-db.md](contracts/news-l1-db.md) v1
 
 ### 背景
 
-xiaobao v0.6 上线了 AI 处理能力（默认关闭），采用 HTTP 同步调用模式（契约 [news-l1 v1](contracts/news-l1.md)），单条处理耗时 74~79 秒，调用方需挂起等待，且重试、超时、解耦能力弱。同时翻译作为 L1 输出的一部分由 ai 承担，但翻译是「看得懂」的基础门槛能力，跟 AI 深度解析（评分/摘要/标签/上下文）的定位有差异。
+xiaobao v0.6 上线了 AI 处理能力（默认关闭），采用 HTTP 同步调用模式（契约 [news-l1 v1](contracts/news-l1.md)），单条处理耗时 74~79 秒，调用方需挂起等待，且重试、超时、解耦能力弱。
 
-v0.6.1 决定：
-1. **翻译职责剥离**：翻译从 ai 中枢剥离到 xiaobao 侧，由 xiaobao 调第三方翻译 API 自管，ai 不再做翻译
-2. **AI 解析集成模式变更**：ai 深度解析从 HTTP 同步调用改为数据库契约边界异步解耦，xiaobao 入库标记状态 → ai 轮询取数处理 → 写回数据库
+v0.6.1 决定：**news-l1 AI 解析集成模式从 HTTP 同步调用改为数据库契约边界异步解耦**。xiaobao 入库标记状态 → ai 轮询取数处理 → 写回数据库。翻译职责保留在 ai 侧（与 REQ-001 一致），不剥离。
 
-### 变更内容（请 ai 承接的两件事）
+### 变更内容（请 ai 承接的事项）
 
-#### 变更 1：ai 不再做翻译
+#### 变更 1：AI 解析从 HTTP 同步改数据库契约边界异步解耦
 
-- ai 中枢移除翻译职责，原 REQ-001 中「翻译」输出字段不再由 ai 产出
-- 翻译相关数据层完全由 xiaobao 管理（新增 `translations` 表，三层入库架构：raw_items → translations → processed_news）
-- ai 侧处理输入应为「翻译完成后的中文内容」（若原文是外文），ai 专注做深度解析（评分/摘要/标签/上下文）
-- 翻译失败时 ai 仍可基于原文做解析（不阻塞）
-
-#### 变更 2：AI 解析集成模式从 HTTP 改数据库契约边界
-
-- ai 服务从「HTTP 服务等请求」改为「轮询 worker 模式」：定期从共享数据库取 `pending_ai` 状态的任务，处理完写回
-- ai 侧需新增**数据源适配层**：把「从 xiaobao 库取数」封装为独立适配层，AI 处理核心不感知数据是从数据库来还是从 HTTP 请求来
+- ai 服务从「HTTP 服务等请求」改为「轮询 worker 模式」：定期从共享数据库取待处理的 AI 类新闻，处理完写回
+- ai 侧需新增**数据源适配层**：把「从 xiaobao 库取数」封装为独立适配层，AI 处理核心不感知数据来源（数据库 / HTTP 请求）
 - 此要求源自 [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)（ai 生态定位为多调用方预留），ai 直连 xiaobao 库读 schema 会把 ai 焊死在 xiaobao 上，必须用适配层隔离
+
+#### 变更 2：翻译保留在 ai 侧（不变更）
+
+- 翻译职责仍由 ai 承担（与 REQ-001 一致），输入为原文，输出含翻译字段
+- 数据库契约中 `processed_news.translation` 字段仍由 ai_worker 写入
+- 说明：2026-07-05 初版曾计划将翻译剥离到 xiaobao，后经 v0.6.1 PRD Review 阶段 Owner 决策调整，改为保留在 ai 侧以简化架构（两层入库替代三层）
 
 ### ai 侧需做的工作
 
-1. **架构改造**：HTTP 服务模式 → 轮询 worker 模式
+1. **架构改造**：HTTP 服务模式 → 轮询 worker 模式（claim → 处理 → 写回）
 2. **适配层封装**：数据获取逻辑独立分层，处理核心不感知取数方式
-3. **翻译职责剥离**：移除 L1 处理流程中的翻译步骤（输入改为已翻译的中文内容）
-4. **承接新契约**：待 xiaobao 侧的数据库边界契约（表、字段、状态枚举、读写权属）出稿后，ai 侧按契约实现
-5. **保留灰度能力**：支持 HTTP 模式与数据库模式切换的配置开关，便于灰度验证和回滚
+3. **承接新契约**：按 [news-l1-db v1](contracts/news-l1-db.md) 数据库边界契约实现
+   - 读：`raw_items` 指定列 + `sources` 指定列 + `tasks` claim
+   - 写：`raw_items.l1_status` 等状态字段 + `processed_news` 写入结果 + `tasks` 状态更新
+4. **保留灰度能力**：支持 HTTP 模式与数据库模式切换的配置开关，便于灰度验证和回滚
+5. **卡死回收**：配合 xiaobao 侧的卡死回收机制（claim 时 `locked_by` + `locked_at`，超时未释放由 xiaobao 回收）
 
 ### 边界与衔接
 
-- **契约变更**：本变更涉及 [news-l1](contracts/news-l1.md) 契约重大修订，xiaobao 侧将在 coordination `contracts/` 下新建数据库边界契约（v0.6.1 PRD R1 已纳入前置依赖 AC-15），CHANGELOG 记一行
-- **schema 权属**：共享库 schema 归 xiaobao 所有，ai 只能读指定待处理表、写回指定结果字段，不得建表改表
+- **契约变更**：本变更是 [news-l1 v1](contracts/news-l1.md) HTTP 契约的**新增并行模式**，非替换。HTTP 模式契约继续有效（灰度 / 回滚用）。数据库边界契约见 [contracts/news-l1-db.md](contracts/news-l1-db.md) v1
+- **schema 权属**：共享库 schema 归 xiaobao 所有，ai 只能读指定表列、写回指定结果字段，不得建表改表。权限由数据库角色 GRANT 控制
 - **与 REQ-001 的关系**：REQ-001 已关闭（ai v0.1 已交付 HTTP 模式 + 翻译），本 REQ 是其后继变更，ai 侧需在下一个迭代中承接
 - **与 REQ-002 的关系**：REQ-002 架构调研结论若与本变更有关联，由 ai PM 自行判断是否合入本 REQ 的承接迭代
 - **多调用方定位**：本变更要求 ai 做适配层封装正是为了保住 decisions/0002 的多调用方定位，不与此决策冲突
 
-### xiaobao 侧的前置产出（ai 承接前需等待）
+### xiaobao 侧已完成的前置产出
 
-1. v0.6.1 PRD R1 Review 通过、定稿（含三层入库架构和状态机）
-2. coordination `contracts/` 下数据库边界契约出稿（表、字段、状态枚举、读写权属、卡死回收阈值约定）
-3. xiaobao 侧 `translations` 表结构设计完成（Architect 阶段产出）
+1. ✅ v0.6.1 PRD R2 已定稿（含两层入库架构和 5 态状态机）
+2. ✅ coordination `contracts/news-l1-db.md` 数据库边界契约 v1 已出稿
+3. ✅ xiaobao 侧设计文档 R2（含 schema 设计、权限模型、迁移方案、前端展示分层）
+   - 设计文档：xiaobao `docs/progress/iterations/v0.6.1-design.md`
 
 ### 联调预期
 
 - ai 侧改造完成后，xiaobao 与 ai 在共享数据库上做端到端联调
-- 联调用例覆盖：正常解析路径 / 解析失败重试 / 卡死回收 / 翻译失败仍可解析 / ai 服务不可用时 xiaobao 不阻塞
+- 联调用例覆盖：正常解析路径 / 解析失败重试 / 卡死回收 / ai 服务不可用时 xiaobao 不阻塞 / HTTP 模式与数据库模式切换
 - Owner 验收通过后切换灰度开关
 
 ### 沟通文档
 
-待 ai · PM 评估承接后建立 `communications/REQ-003-db-boundary-and-translation-extraction.md`。
+待 ai · PM 评估承接后建立 `communications/REQ-003-db-boundary-async.md`。

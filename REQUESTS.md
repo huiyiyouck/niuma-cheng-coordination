@@ -88,6 +88,7 @@
 | BCR-010 | 参谋长（生态根会话）· Owner 拍板，2026-07-04 | 跨项目定位禁相对路径→绝对路径写死→换机器/上生产即失效（xiaobao/ai 的 `coordination_root`=`/root/Project/...` 已失效）；放开为「显式相对路径（项目根为基准），仍禁无配置猜测」 | agent-workflow `cross-project-collaboration.md` §coordination 发现机制；下游各项目 `coordination_root` 改相对 | 已回流下游（终态） | 参谋长落地（框架维护权 BCR-009） | `1d1f935` | baseline: ai `cbdea27` / xiaobao `7e97465` / workboard `e240db0`；`coordination_root` 改相对：xiaobao `aa28883` / ai `1b2e699`，workboard 无需 | 下游修复：xiaobao/ai 的 `coordination_root` 改 `../niuma-cheng-coordination`（归各项目会话）；workboard 已用相对路径未坏 |
 | BCR-011 | workboard · Developer（2026-07-05） | 迭代记录「阶段状态」无标准词表，门禁表结构约定缺失：各项目历史记录写法各异（已定稿 / 部署通过 / 已Review / ✅ 验收通过 / 已跳过…），且有非阶段性内容（如「UI 增强方向」）以三级标题混入阶段门禁区——下游工具（workboard 迭代时间轴）与流程审计只能读取侧逐版本兼容。建议：① `iteration.md` 模板定义封闭状态枚举（如：未开始 / 进行中 / Review中 / 待修正 / 已定稿 / 已完成 / 已跳过）并注明门禁表最新轮次置末行；② 约定「## 阶段门禁」下三级标题只放标准阶段，停放性记录（讨论记录 / 未来方向）移出门禁区或走 ad-hoc | agent-workflow `docs/templates/iteration.md`；或另涉 `standard-iteration-quick.md` 门禁表述；回流后约束各下游**新**迭代记录写法 | 已回流下游 | 参谋长评估：采纳。采用既有 baseline 阶段门禁词表 `待Review / Review中 / 修改中 / 已定稿 / 阻塞 / 已跳过`，不采用提案中跨层级的 `未开始/进行中/已完成`；在 `iteration.md` 模板补状态枚举、部署检查独立枚举、最新轮次置末行、门禁区只放标准阶段。方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-08-bcr-011-012-iteration-gate-spec.md` | `39e7a35` | ai `a53b680` / xiaobao `4dbbddb` / workboard `ad9b706`（2026-07-08） | 与 BCR-012 合并同轮落地；历史迭代记录不回改，仅约束新迭代记录 |
 | BCR-012 | workboard · Developer（2026-07-07） | `iteration.md` 模板未随 BCR-004（删 UI 阶段）/ BCR-006（删测试阶段）同步收敛「阶段门禁」的阶段字段集——模板与历史记录里仍保留「测试阶段」「UI 方案阶段」小节，与当前标准流水线（PRD → 设计 → 实现 → 部署就绪检查 → 迭代关闭）不符，下游工具（workboard 时间轴）只能在读取侧把它们降级为「附加记录」兼容。建议：`iteration.md` 模板固定当前标准阶段字段集，**显式删除「测试阶段」「UI 方案阶段」小节**（或保留但字段置空 + 注释「BCR-006 已并入 Developer 自测 / BCR-004 已并入 PRD」），使新迭代记录门禁结构统一、下游可确定性解析、无需逐版本兼容 | agent-workflow `docs/templates/iteration.md`（`## 阶段门禁` 阶段小节）；连带 `standard-iteration-quick.md` 阶段列举；回流后约束下游**新**迭代记录写法 | 已回流下游 | 参谋长评估：部分采纳。当前 `iteration.md` 已无「测试阶段 / UI 方案阶段」小节，原问题描述在现行 main 不复现；采纳其“固定标准阶段字段集”方向，并入 BCR-011 同轮落地，同时清理 `role-architect.md` 中残留 UI 阶段检查口径。方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-08-bcr-011-012-iteration-gate-spec.md` | `39e7a35` | ai `a53b680` / xiaobao `4dbbddb` / workboard `ad9b706`（2026-07-08） | 与 BCR-011 合并同轮落地；历史迭代记录不回改；采纳性质为部分采纳 |
+| BCR-013 | workboard · PM（2026-07-12） | 工作流会话未携带结构化「角色+迭代」标识，下游 workboard 精准匹配（会话↔角色↔迭代）只能靠启发式猜（首条「你是XX」+关键词加权，见 `session-meta.js`），信号稀疏（workboard Developer 预研：`vX.Y` 会话开头仅 3%、标题 0 次、全文 71% 但无法定位），`detected_role` 不稳、迭代归属几乎无信号，准确度天花板卡在会话源头 | agent-workflow 角色启动约定（`runtime.md`/入口/`role-*.md` 启动检查）或收尾机制（`mechanisms.md`）；下游 workboard 消费 | 评估中 | 参谋长初评：建议往采纳方向（方案 B「assistant 启动输出固定格式标识行」为主 + D「收尾迭代记录带标识」为辅），前置须框架 + workboard 共定 token 格式契约（否则框架落一个 workboard 解析不了的格式）；明确不采纳 A（用户手打结构化触发，违背自然语言入口）/ C（落盘 marker，会话↔文件绑定无解）。核心张力已过关：标识对流程审计/会话可追溯同样有用，可自证框架价值而非工具耦合。待 Owner 拍板采纳方向 + token 契约落点（coordination `contracts/` 或 BCR 明细）。方案游标：agent-workflow `docs/progress/ad-hoc/2026-07-12-bcr-013-session-role-iteration-marker.md`（`16398cd`） | — | — | 治本 workboard「会话↔角色↔迭代」精准匹配；workboard v0.2.1 做治标（软匹配：同角色置顶+可手选），本 BCR 治本留 workboard v0.3 收割；详情见下 |
 
 ### BCR-001 · 基线修正提案走 coordination 管理
 
@@ -272,6 +273,22 @@
   - [x] baseline 发现机制放开 + 回流三下游（`cbdea27` / `7e97465` / `e240db0`）
   - [x] xiaobao `coordination_root` 改相对 `aa28883`
   - [x] ai `coordination_root` 改相对 `1b2e699`
+---
+
+## BCR-013 · 工作流会话自带「角色 + 迭代」结构化标识
+
+- 提出方：workboard · PM（2026-07-12）
+- 问题：workboard 要做「会话 ↔ 角色 ↔ 迭代」精准匹配，但工作流会话**本身不携带可靠的结构化标识**。现状 workboard 侧只能靠启发式推断（首条「你是 XX」精确匹配 + 前 5 条关键词加权，见 `niuma-cheng-workboard/src/server/sync/session-meta.js`），信号稀疏——workboard Developer 预研实测：靠会话开头提 `vX.Y` 仅 **3%**（4/115）、标题 **0 次**、全文任意处出现 71%（82/115）但无法定位归属。导致：
+  - `detected_role`（角色识别）不稳，跨角色误判；
+  - 迭代归属几乎无可靠信号，「某会话属于哪个迭代」无法确定；
+  - **准确度天花板卡在会话源头**，workboard 侧再优化算法也是治标。
+- 期望（方向供 Owner + 参谋长评估，不定死方案）：让工作流在会话生命周期注入可被下游可靠读取的「角色 + 迭代」标识。候选方向：
+  1. 约定角色切换**开场白结构化格式**（如统一首句「你是 {角色}，当前迭代 {vX.Y}」），下游可稳定解析；
+  2. 或在项目 `docs/progress/` 登记「会话 id ↔ 角色 ↔ 迭代」**映射真源**（启动/收尾机制写入），下游读真源而非猜。
+- 理由：治本 workboard 精准匹配（支撑「角色 Tab 只放该角色会话」等强匹配能力）；同时利于流程审计与跨项目会话追溯。
+- 影响范围：agent-workflow 角色启动约定（`runtime.md` / 入口 `CLAUDE.md`·`AGENTS.md` / `role-*.md` 启动检查）或收尾机制（`mechanisms.md`）；回流后影响各下游会话行为；消费方 workboard。
+- 与 workboard v0.2.1 的关系：v0.2.1 做**治标**——`detected_role` 算法优化 + 页内选会话「同角色置顶 + 可手选」软匹配（不硬限制，人工兜底）；本 BCR **治本**，落地后 workboard v0.3 再上强匹配 / 强限制。
+- 落地：本提案仅提报，评估 · 采纳 · 落地由 Owner + 参谋长（框架维护权 BCR-009）。
 ---
 
 ## REQ-003 · v0.6.1 集成模式变更（翻译剥离 + 数据库契约边界）

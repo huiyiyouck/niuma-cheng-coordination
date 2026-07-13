@@ -3,6 +3,11 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-07-12
+
+- **REQ-003 R2 更新 + 新增数据库边界契约 `news-l1-db` v1** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker + 适配层封装）。翻译保留在 ai 侧（2026-07-05 初版曾计划剥离，后经 Owner 决策调整为保留）。新增数据库角色 `ai_worker` + 列级 GRANT + SECURITY DEFINER 触发器 + tasks claim 卡死回收机制。非 breaking（HTTP 模式契约继续有效，作为灰度/回滚路径）。影响项目：`xiaobao`、`ai`。
+- **REQ-003 状态更新**：xiaobao 侧 PRD R2 + 设计 R2 PM 复审均已通过，数据库边界契约 v1 已出稿，待 ai · PM 评估承接。
+
 ## 2026-07-01
 
 - **REQ-001 联调证据回填**：xiaobao 测试环境 `/debug/ai` 已部署，xiaobao→ai news-l1 主链路成功；ai→xiaobao `kb-search` 命中用例成功。补充 `kb-search` v1 空结果语义：`results: []` 是 200 正常响应，不等同工具失败。非 breaking。影响项目：`xiaobao`、`ai`。

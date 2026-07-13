@@ -12,9 +12,9 @@
 | 技术栈 | Node.js + Fastify + Vue |
 | 仓库 | `git@github.com:huiyiyouck/niuma-cheng-xiaobao.git` |
 | 职责边界 | 信息源管理、抓取调度、L0 分类、新闻展示、评分加权（`score_total`）；**不**做 L1 LLM 推理 |
-| 当前入口 | 项目内 `docs/progress/INDEX.md`（当前 v0.6 标准迭代，实现阶段联调精修） |
+| 当前入口 | 项目内 `docs/progress/INDEX.md`（当前 v0.6.1 迭代，实现 R1，设计文档已定稿） |
 | 关联项目 | `ai`（调用方 → 服务方） |
-| 沟通文档 | 见 [REQUESTS.md](REQUESTS.md)（当前 REQ-001 指向 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md)） |
+| 沟通文档 | 见 [REQUESTS.md](REQUESTS.md)（REQ-001 已关闭；REQ-003 待 ai · PM 评估承接） |
 
 ## ai — AI 处理中枢（Agent Hub）
 
@@ -28,7 +28,7 @@
 | 职责边界 | 首落地 xiaobao news-l1：四维评分（`score`+`reason`）、标签、摘要、翻译、按需工具调用（KB 检索 / 链接读取 / Web 搜索）；**不**做评分加权 `score_total`（留在 xiaobao）。v0.1 仅实现 news-l1 一个 task-type，多调用方/多任务为预留扩展点 |
 | 当前入口 | 项目内 `docs/progress/INDEX.md`（**已接入团队工作流**，v0.1 已交付并关闭（2026-07-04，`v0.1-summary.md`）；当前迭代：无） |
 | 关联项目 | `xiaobao`（服务方 ← 调用方） |
-| 沟通文档 | 见 [REQUESTS.md](REQUESTS.md)（当前 REQ-001 指向 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md)） |
+| 沟通文档 | 见 [REQUESTS.md](REQUESTS.md)（REQ-001 已关闭；REQ-003 待 ai · PM 评估承接） |
 
 ## agent-workflow — AI 助手团队工作流真源
 

@@ -14,6 +14,7 @@
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（已关闭，2026-07-04） | 已关闭 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
 | REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，待启动） | 已承接 | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
 | REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker 模式 + 适配层封装），翻译保留在 ai 侧 | 待 ai · PM 评估承接 | — | 已提报（2026-07-05 初版，2026-07-12 R2 更新） | [contracts/news-l1-db.md](contracts/news-l1-db.md) |
+| REQ-004 | 参谋长（Owner 授权代提，2026-07-18） | 跨项目「在途未响应项」高亮：把台账未同步行、超期无响应的 REQ/BCR 在看板显式高亮/置顶，让 Owner 日常可见，不依赖有人恰好开对会话 | 待 workboard · PM 评估承接 | — | 已提报（2026-07-18） | 待承接后建立 |
 
 ---
 
@@ -65,6 +66,20 @@
 
 - 本条是**调研/预研性质**输入，非契约变更；`news-l1` 契约真源仍以 [contracts/news-l1.md](contracts/news-l1.md) 为准，本调研结论若要改契约须另走契约流程。
 - 与 REQ-001 的关系：REQ-001 是「L1 真实化」的交付需求，REQ-002 是其前置的架构调研；ai 承接后可自行决定二者合并到同一迭代还是分开。
+
+---
+
+## REQ-004 · 跨项目「在途未响应项」高亮（响应侧可见性护栏）
+
+- 提出方：参谋长（生态根会话）· Owner 授权代提，2026-07-18
+- 背景：2026-07-18 参谋长现状摸底发现，跨项目机制的失效模式集中在**响应侧**——登记/提报都有人做，但响应动作全是「会话触发式」，没有时间节拍。实例：台账 workboard 两行 ⬜⬜ 积压 11 天（参谋长侧）、REQ-003 提报 13 天无承接评估留痕（ai 侧）、BCR-014 提报 5 天未评估。
+- 需求内容（供承接方 PM 定义细节，此处只给方向）：
+  1. **台账未同步行高亮**：STATUS.md 元信息变更台账中存在 ⬜ 列的行，在看板显式高亮；
+  2. **超期未响应 REQ/BCR 置顶/高亮**：需求池「已提报」状态超 N 天（N 由 PM 定，建议默认 7 天）无状态推进的 REQ，以及 BCR 池停在「已提报/评估中」超 N 天的 BCR；
+  3. 展示位置由 PM 定（建议放 Owner 日常必看的首屏/跨项目视图）。
+- 理由：workboard 是 Owner 日常查看的聚合面板，把「该捞没捞」的信号推到眼前，是机制护栏而非新增条文；与参谋长定时巡检（另行落地）互补。
+- 边界：workboard 仍不回写被监控仓；本需求是纯读取+展示层增强。
+- 当前状态：已提报，待 workboard · PM 评估承接（可排 v0.3 或 v0.4）。
 
 ---
 

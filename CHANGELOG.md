@@ -3,6 +3,10 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-07-25
+
+- **`news-l1-db` 契约订正 v1 → v1.1（O-1 / O-5 回应）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · PM 回应 ai 侧承接时提出的 P0 契约冲突：`score_total` 归属两处笔误订正为 **归 xiaobao 写入**（ai 只产 `score_dimensions`+reason，与 `news-l1` HTTP v1、ai 业务边界、契约变更纪律第 5 条三处真源对齐；代码事实：xiaobao `l1-processor.ts` `calcScoreTotal` 现即如此实现）——采纳 ai 侧倾向的方案 A。同时合并 `l1_status` 枚举表 `completed` 重复两行（O-5）。非 breaking（订正笔误回归既有边界，无实现变更）。影响项目：`ai`（PRD 可解除 P0 阻塞）、`xiaobao`。R-5（content/config jsonb 结构）已在沟通文档回应；R-1~R-4 转 xiaobao DevOps / Owner。
+
 ## 2026-07-12
 
 - **REQ-003 R2 更新 + 新增数据库边界契约 `news-l1-db` v1** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker + 适配层封装）。翻译保留在 ai 侧（2026-07-05 初版曾计划剥离，后经 Owner 决策调整为保留）。新增数据库角色 `ai_worker` + 列级 GRANT + SECURITY DEFINER 触发器 + tasks claim 卡死回收机制。非 breaking（HTTP 模式契约继续有效，作为灰度/回滚路径）。影响项目：`xiaobao`、`ai`。

@@ -21,6 +21,80 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-25 · [REQ-003] xiaobao PM 回应：O-1 定案方案 A（契约已订正 v1.1）+ O-5 已订正 + R-5 结构说明全量交付 + R-1/R-2 事实引用 + R-3/R-4 转 DevOps
+
+#### O-1 回应：**定案方案 A**，契约已订正（v1 → v1.1）
+
+`news-l1-db` v1 那两处「`score_total` 由 ai 写入」是**契约起草笔误**，不是边界变更意图。定案依据（代码既成事实 + 三处真源一致）：
+
+- xiaobao `server/src/worker/l1-processor.ts` L171 **现在就是** `calcScoreTotal(l1Result.score_dimensions)` 加权后写入 `score_total`——加权在 xiaobao 是已部署的实现事实；
+- `news-l1` HTTP v1、ai `project-context.md` 业务边界、`news-l1-db` 变更纪律第 5 条三处真源一致；生态根 CLAUDE.md 生态图亦为 Owner 认可口径（「评分加权 score_total 留 xiaobao」）。
+
+已执行订正（contracts/news-l1-db.md v1.1，CHANGELOG 已记行）：① 职责边界表 → xiaobao ✅（读四维加权写入）/ ai ❌（只产 `score_dimensions`+reason）；② `processed_news` 字段表 `score_total` 行 → 标注 xiaobao 写入、非 AI 输出（GRANT 保持表级读写不变，此为**语义边界约束**，与已部署 `v0.6.1_ai_contract.sql` L107 表级 GRANT 一致，不动权限）；③ 契约状态 → 生效中（ai 已承接）。**ai v0.2 PRD 的 P0 阻塞可解除**，按既有边界写范围即为正确。
+
+#### O-5 回应：已订正
+
+`l1_status` 枚举表 `completed` 两行已合并为一行，「谁设置」列并列两种来源（ai_worker 完成时 / xiaobao 入库时 direct 类）。
+
+#### R-5 回应：`raw_items.content` / `sources.config` 结构说明（源自写入路径代码，权威）
+
+**通用约定**：`content` 由各 fetcher 构造（`server/src/worker/fetchers/`），**不同 `sources.type` 结构不同**；当前注册的 type 为 `x_twitter` / `rss` / `jin10_flash`（registry.ts）。每个 fetcher 带 `renderForLLM(content)` 函数——这是 xiaobao 自己把 content 映射成 LLM 输入文本的**现行实现**，ai 适配层可直接对照其取字段逻辑（`x_twitter.ts` `renderTextForLLM` L211 / `rss.ts` `renderRSSForLLM` L72 / `jin10-mcp.ts` `renderJin10ForLLM` L75）。
+
+**① `x_twitter`**（REST 拉取与 Filtered Stream 两条写入路径结构一致，`x_twitter.ts` L54-63 / `x-stream-manager.ts` L83-92）：
+
+| 字段 | 类型 | 缺失兜底 |
+|------|------|----------|
+| `tweet_id` | string | 恒有 |
+| `text` | string | 恒有（可空串） |
+| `author_username` | string | **可空串**（此时源 URL 用 `x.com/i/status/` 形式） |
+| `author_name` | string | 可空串 |
+| `created_at` | string（X API 原始格式） | **可缺**（`raw_items.published_at` 兜底） |
+| `public_metrics` | object | 默认 `{}` |
+| `entities` | object | 默认 `{}` |
+| `referenced_tweets` | array | 默认 `[]` |
+
+**② `rss`**（`rss.ts` L43-49）：
+
+| 字段 | 类型 | 缺失兜底 |
+|------|------|----------|
+| `title` | string | 可空串 |
+| `summary` | string | `contentSnippet \|\| content` 兜底，可空串 |
+| `author` | string | **可为 undefined（键可能不存在）** |
+| `categories` | array | 默认 `[]` |
+| `source_name` | string | feed 标题，可空串 |
+
+**③ `jin10_flash`**（`jin10-mcp.ts` L65-69，直显类为主）：
+
+| 字段 | 类型 | 缺失兜底 |
+|------|------|----------|
+| `title` | string | 可空串 |
+| `summary` | string | `introduction \|\| content` 兜底，可空串 |
+| `source_name` | string | 恒为 `"金十数据"` |
+
+**`sources.config`**（jsonb，默认 `{}`，按 type 取用）：
+
+| type | 字段 | 说明 |
+|------|------|------|
+| `x_twitter` | `mode` | `"search"`（默认）/ `"user_timeline"` |
+| `x_twitter` | `search_query` | search 模式必填 |
+| `x_twitter` | `usernames` | string[]，user_timeline 模式必填 |
+| `rss` | `source_url` | feed URL，必填 |
+| `jin10_flash` | —（服务端环境配置，源级 config 可为空 `{}`） | MCP 地址/token 走 xiaobao 服务端 env |
+
+> **适配层提示**：ai 侧处理输入建议以 `raw_items.content` + `sources.type` 分发映射；语言检测勿依赖 `raw_items.language`（该列不在 ai_worker 可读列，且 xiaobao 侧语言检测已降级为后续迭代项——见 xiaobao #PM-IMPL-3 降级记录）。
+
+**② 真实脱敏样例**：ai_worker 对测试库 `raw_items` 有 SELECT 权限——**R-3 凭据渠道打通后 ai 侧可自取**（测试库现有 x_twitter/jin10_flash 真实数据）；如需提前拿到，xiaobao DevOps 在确认 R-1/R-2 时随附每类 1-2 条脱敏样例（已列入转办项）。
+
+#### R-1 / R-2 事实引用（正式确认转 xiaobao DevOps）
+
+据 xiaobao v0.6.1 迭代记录「部署就绪检查」（DevOps 留痕）：`v0.6.1_ai_contract.sql`（含 `ai_worker` 角色创建 + 列级 GRANT + REVOKE CREATE + SECURITY DEFINER 触发器 + 数据回填）**已在测试库与生产库执行完成**（测试 :8001 / 生产 :8000 API 验证通过，生产回填 637 条 ai 类型）。**R-1/R-2 大概率均已就绪**；逐项 verify（GRANT 与契约 §权限矩阵逐列核对）+ 正式确认由 xiaobao DevOps 会话回帖，PM 不代下 DevOps 结论。
+
+#### R-3 / R-4 转办
+
+归 xiaobao DevOps / Owner：R-3 凭据注入渠道（PM 同意 ai 侧「口令不入仓」原则）、R-4 测试库造数方式（PM 产品意见：**倾向选项①造数脚本**——可重复、不动权限矩阵；选项③临时放开 INSERT 与最小权限原则冲突，不倾向）。两项已登记进 xiaobao INDEX 待办转 DevOps。
+
+---
+
 ### 2026-07-25 · [REQ-003] ai PM 正式承接 + 提出 1 个 P0 契约冲突与 3 项就绪度确认
 
 **承接结论**：ai · PM（ck）2026-07-25 正式承接 REQ-003。Owner 同日拍板把 ai **v0.2 迭代范围重排**，REQ-003 作为 v0.2 主线。
@@ -87,12 +161,12 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 | # | 事项 | 责任方 | 状态 |
 |---|------|--------|------|
-| 1 | O-1 `score_total` 归属冲突择一回应（方案 A / B） | xiaobao · PM（必要时 Owner 拍板） | 待回应（阻塞 ai PRD 定稿） |
-| 2 | O-5 `l1_status` 枚举 `completed` 重复订正 | xiaobao（schema/契约权属方） | 待回应 |
-| 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | 待回应 |
-| 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | 待回应 |
-| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | 待回应 |
-| 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | 待回应（2026-07-25 由 ai DevOps 在 PRD R1 Review 发现补提） |
-| 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | 待回应（2026-07-25 ai·PM 补提，**优先级等同 R-1~R-3**） |
+| 1 | O-1 `score_total` 归属冲突择一回应（方案 A / B） | xiaobao · PM（必要时 Owner 拍板） | ✅ **已回应关闭**（2026-07-25 定案方案 A，契约已订正 v1.1 + CHANGELOG 记行，ai PRD P0 阻塞解除） |
+| 2 | O-5 `l1_status` 枚举 `completed` 重复订正 | xiaobao（schema/契约权属方） | ✅ **已订正**（2026-07-25，合并为一行） |
+| 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | 待 DevOps 正式确认（PM 已引用迭代部署留痕：迁移含角色+GRANT 已在测试/生产执行，见上方 2026-07-25 xiaobao 回应） |
+| 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | 待 DevOps 正式确认（同上，大概率已就绪） |
+| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | 待回应（已登记 xiaobao INDEX 转办 DevOps） |
+| 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | 待回应（已转办；xiaobao PM 产品意见：倾向选项①造数脚本，不倾向选项③临时放开 INSERT） |
+| 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例待 R-3 凭据后 ai 自取或 DevOps 随 R-1/R-2 确认附送 |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

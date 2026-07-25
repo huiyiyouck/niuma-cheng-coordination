@@ -13,7 +13,7 @@
 |---------|--------|------|--------|----------|------|----------|
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（已关闭，2026-07-04） | 已关闭 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
 | REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，已完成并随 v0.1 关闭） | 已关闭（2026-06-29 调研完成，2026-07-25 销账） | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
-| REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker 模式 + 适配层封装），翻译保留在 ai 侧 | ai · PM（ck），2026-07-25 承接 | ai v0.2（主线，PRD R1 待三方 Review） | 开发中（转入迭代）；**待 xiaobao 回应 1 个 P0 契约冲突**（`score_total` 归属，见沟通文档 O-1） | [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)（契约：[contracts/news-l1-db.md](contracts/news-l1-db.md)） |
+| REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker 模式 + 适配层封装），翻译保留在 ai 侧 | ai · PM（ck），2026-07-25 承接 | ai v0.2（主线，PRD R1 待三方 Review） | 开发中（转入迭代）；O-1 P0 已回应关闭（2026-07-25 xiaobao·PM 定案方案 A，契约订正 v1.1）+ O-5/R-5 已交付；余 R-1~R-4 待 xiaobao DevOps / Owner（见沟通文档待跟进表） | [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)（契约：[contracts/news-l1-db.md](contracts/news-l1-db.md)） |
 | REQ-004 | 参谋长（Owner 授权代提，2026-07-18） | 跨项目「在途未响应项」高亮：把台账未同步行、超期无响应的 REQ/BCR 在看板显式高亮/置顶，让 Owner 日常可见，不依赖有人恰好开对会话 | 待 workboard · PM 评估承接 | — | 已提报（2026-07-18） | 待承接后建立 |
 
 ---
@@ -339,8 +339,8 @@
 - 提报日期：2026-07-05（初版）；2026-07-12（R2 更新）
 - 关联迭代：xiaobao v0.6.1（PRD R2 已定稿，设计 R2 PM 复审通过）；**ai v0.2（主线，2026-07-25 承接）**
 - 当前状态：**已承接，开发中**（ai · PM ck 2026-07-25 承接，Owner 拍板 ai v0.2 范围重排为 REQ-003 主线；ai 侧 PRD R1 待 Architect/Developer/DevOps 三方 Review）
-- 数据库边界契约：[contracts/news-l1-db.md](contracts/news-l1-db.md) v1
-- 待 xiaobao 回应：**1 个 P0 契约冲突（`score_total` 归属）+ 3 项就绪度确认**，详见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)
+- 数据库边界契约：[contracts/news-l1-db.md](contracts/news-l1-db.md) v1.1（2026-07-25 订正 `score_total` 归属 + `completed` 枚举重复）
+- xiaobao 回应进度（2026-07-25）：O-1 P0 已定案方案 A 并订正契约 ✅ / O-5 已订正 ✅ / R-5 结构说明已交付 ✅ / R-1~R-4 转 xiaobao DevOps 与 Owner，详见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md) 待跟进表
 
 ### 背景
 

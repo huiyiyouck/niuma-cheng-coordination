@@ -1,11 +1,11 @@
 # 契约：news-l1-db（新闻 L1 数据库边界契约）
 
 - 契约 id：`news-l1-db`
-- 版本：v1
-- 状态：已出稿，待 ai 侧承接确认
+- 版本：v1.1（2026-07-25 订正 `score_total` 归属笔误 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
+- 状态：生效中（ai 已承接 REQ-003，2026-07-25）
 - schema 权属方：`xiaobao`（拥有建表改表、角色管理、触发器创建权限）
 - worker 方：`ai`（AI 处理中枢 / Agent Hub）
-- 最近更新：2026-07-12
+- 最近更新：2026-07-25
 - 真源说明：本文件是 news-l1 数据库边界契约的**单一真源**。表结构、字段、状态枚举、读写权属变更前先改本文件，再改两侧实现，并在 [../CHANGELOG.md](../CHANGELOG.md) 记一行。
 - 与 HTTP 契约关系：本契约是 [news-l1 v1](news-l1.md) HTTP 契约的**并行新增模式**，非替换。HTTP 模式继续有效（灰度 / 回滚用）。
 - 实现参考：xiaobao `docs/progress/iterations/v0.6.1-design.md` §2 数据模型 + §2.5 数据库角色与权限
@@ -21,7 +21,7 @@
 | processed_news 写入（direct 类） | ✅ | ❌ |
 | news_positions 关联 | ✅（触发器自动） | ❌ 无权限 |
 | tasks 创建与卡死回收 | ✅ | ❌ 只 claim / 更新状态 |
-| 评分加权 score_total | ❌（由 ai 写入最终值） | ✅ |
+| 评分加权 score_total | ✅（读 ai 产出的 `score_dimensions` 四维后加权计算并写入，实现见 xiaobao `l1-processor.ts` `calcScoreTotal`） | ❌（只产 `score_dimensions` + reason，不算不写 `score_total`） |
 | 状态机推进 | ✅（初始标记 / 回收） | ✅（claim / 完成 / 失败） |
 
 ## 核心表与字段
@@ -56,11 +56,10 @@
 |----|------|--------|
 | `queued` | 已入队待处理（= PRD 产品语义 `pending`） | xiaobao 入库时 |
 | `processing` | 处理中（被 ai_worker claim） | ai_worker claim 时 |
-| `completed` | 处理完成 | ai_worker 完成时 |
+| `completed` | 处理完成（AI 类 = AI 解析完成；direct 类 = 直显完成，语义相同） | ai_worker 完成时（AI 类）；xiaobao 入库时（direct 类） |
 | `retryable_failed` | 可重试失败 | ai_worker 失败时 / xiaobao 回收时 |
 | `final_failed` | 最终失败（重试耗尽） | ai_worker 或 xiaobao |
 | `not_started` | 未开始 | xiaobao 入库时（direct 类） |
-| `completed` | 直显完成 | xiaobao 入库时（direct 类） |
 
 #### AI 待处理队列 claim 规则
 
@@ -87,7 +86,7 @@ LIMIT N
 | `translation` | jsonb | 翻译，如 `{zh: "...", original?: "..."}` | translation |
 | `context` | jsonb | 背景上下文（数组） | context |
 | `analysis` | text | 深度分析 | analysis |
-| `score_total` | numeric | 综合分 | 四维加权后最终值 |
+| `score_total` | numeric | 综合分（**xiaobao 写入**：读四维加权计算；ai_worker 不写此列——GRANT 为表级读写，此为语义边界约束） | —（非 AI 输出） |
 | `score_dimensions` | jsonb | 四维评分 + 理由 | score_dimensions |
 | `tags_v2` | jsonb | 五类标签：`{domain, entity, event, content_type, sentiment}` | tags |
 | `language` | varchar | 语言标识 | — |

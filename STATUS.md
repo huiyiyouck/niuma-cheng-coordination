@@ -3,14 +3,14 @@
 > 跨项目当前状态真源：各项目阶段、当前阻塞、谁等谁、下一步。
 > 单项目内部细节不在此展开，从「当前入口」链接回各项目 `docs/progress/INDEX.md`。
 > 跨项目需求池见 [REQUESTS.md](REQUESTS.md)（提报中心）。
-> 最近更新：2026-07-12（REQ-003 R2 更新 + news-l1-db 契约 v1 出稿，待 ai 侧承接）。2026-07-04（REQ-001 news-l1 端到端联调完成，Owner 抽样验收通过，可进入关闭流程；KB 空结果语义待 ai 优化为已知遗留项，不阻塞）。2026-07-01（xiaobao 测试环境已部署 `/debug/ai`、`/v1/ai-debug/news-l1-runs`、`/v1/kb-search`；news-l1 主链路与 ai→xiaobao KB 命中用例已双向验证通过；KB 空结果语义待 ai 优化）。2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）
+> 最近更新：2026-07-25（**ai · PM 承接 REQ-003**，转入 ai v0.2 主线、PRD R1 待三方 Review；ai 侧提出 1 个 P0 契约冲突（`score_total` 归属）+ 3 项就绪度确认，待 xiaobao 回应，见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)）。2026-07-12（REQ-003 R2 更新 + news-l1-db 契约 v1 出稿，待 ai 侧承接）。2026-07-04（REQ-001 news-l1 端到端联调完成，Owner 抽样验收通过，可进入关闭流程；KB 空结果语义待 ai 优化为已知遗留项，不阻塞）。2026-07-01（xiaobao 测试环境已部署 `/debug/ai`、`/v1/ai-debug/news-l1-runs`、`/v1/kb-search`；news-l1 主链路与 ai→xiaobao KB 命中用例已双向验证通过；KB 空结果语义待 ai 优化）。2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）
 
 ## 各项目当前状态
 
 | 项目 | 阶段 | 当前入口 | 备注 |
 |------|------|----------|------|
-| `xiaobao` | v0.6 已上线；v0.6.1 实现 R1（设计文档已定稿，PM/Developer/DevOps R2 全部通过） | 项目 `docs/progress/INDEX.md` | REQ-003 数据库边界契约已出稿，待 ai 侧承接；生产 AI 处理默认关闭（X 直显） |
-| `ai` | v0.1 已关闭（2026-07-04，REQ-001 news-l1 真实化交付）；**已接入团队工作流**；PM（ck）已承接 REQ-001、REQ-002；定位升级为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-001 已交付关闭；REQ-002 架构调研结论已用于 v0.1 设计；KB 空结果语义待下一迭代优化 |
+| `xiaobao` | v0.6 已上线；v0.6.1 实现 R1（设计文档已定稿，PM/Developer/DevOps R2 全部通过） | 项目 `docs/progress/INDEX.md` | REQ-003 数据库边界契约已出稿，**ai 侧已于 2026-07-25 承接**（转 ai v0.2 主线）；待 xiaobao 回应 ai 侧提出的 `score_total` 归属冲突 + 3 项就绪度确认；生产 AI 处理默认关闭（X 直显） |
+| `ai` | v0.1 已关闭（2026-07-04，REQ-001 news-l1 真实化交付）；**v0.2 进行中 — PRD 阶段 R1 待 Architect/Developer/DevOps 三方 Review**（2026-07-25 范围重排，主线为 REQ-003 数据库边界异步解耦）；已接入团队工作流；PM（ck）已承接 REQ-001、REQ-002、REQ-003；定位为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-003 已承接（2026-07-25），**阻塞于 `score_total` 归属契约冲突待 xiaobao 回应**；v0.2 顺延项：托管化 / 工具并发 / RunRecord / 多 provider 生产验证 → v0.3；KB 空结果语义已并入 v0.2 |
 | `workboard` | v0.2 已上线（2026-07-07，读写工作台 5 视图）；v0.3 进行中（设计已定稿 2026-07-18，进实现阶段） | 项目 `docs/progress/INDEX.md` | 本行为补登：workboard 立项（2026-06-17）早于「立项登记三处」规则，状态表历史缺行，参谋长 2026-07-18 补齐 |
 
 ## 跨项目阻塞与谁等谁
@@ -38,12 +38,28 @@
 - 谁等谁：**无互等，已关闭**。已知遗留项（非阻塞，转入下一迭代）：ai 侧 KB 空结果语义——当 xiaobao `POST /v1/kb-search` 返回 200 + `results: []` 时，ai 仍标 `degraded:kb_search_failed`，建议优化为 `kb_search_empty` 或不降级。
 - 下一步责任：ai 侧 v0.2 或独立任务优化 KB 空结果语义；xiaobao 侧维持测试服务配置。**news-l1 v1 契约不变**。完整证据见 [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) 2026-07-04 联调完成条 + 关闭记录。
 
+<a name="req003-db-boundary"></a>
+### 4. REQ-003 数据库边界异步解耦（news-l1-db 契约落地）
+
+- 状态：**ai 侧已承接（2026-07-25），转入 ai v0.2 主线**，PRD R1 待 Architect/Developer/DevOps 三方 Review。xiaobao 侧前置已就绪（v0.6.1 PRD R2 定稿、设计 R2 三方通过、`contracts/news-l1-db.md` v1 出稿）。
+- 谁等谁：**xiaobao 欠 ai 5 项回应**（阻塞 ai PRD 定稿与实现）：
+  1. **P0** `score_total` 归属冲突 —— `news-l1-db` v1 要求 ai 写 `score_total` 最终值，与 `news-l1` HTTP v1（「不由 ai 计算」）、ai 业务边界、及该契约自身「输出语义以 HTTP 契约为准」三处冲突（契约内部自相矛盾）。ai 侧倾向方案 A：订正契约，`score_total` 归 xiaobao 写入。
+  2. P2 `l1_status` 枚举中 `completed` 重复两行，建议合并加注。
+  3. `ai_worker` 数据库角色与列级 GRANT 是否已在测试库就绪。
+  4. v0.6.1 schema 迁移是否已在测试库落地。
+  5. 共享库连接信息与 `ai_worker` 凭据注入渠道（ai 侧不接受口令入仓）。
+- 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
+- 下一步责任：xiaobao 项目会话回应上述 5 项（1 为阻塞项）；ai 项目组并行推进 PRD 三方 Review。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
+- 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
+
 ## 下一步汇总
 
 1. ~~Owner：为 `niuma-cheng-ai` 配置 GitHub remote~~ —— 已完成（2026-06-21），`PROJECTS.md` 仓库地址已回填。
 2. ai 项目会话：PM 已承接 REQ-001；Owner 确认后由 PM 创建 `v0.1-prd.md` 启动标准迭代，实现 news-l1 真实 L1 处理（stub→真实）。
 3. 任一侧改 news-l1 契约：先改 `contracts/news-l1.md`，CHANGELOG 记一行。
 4. xiaobao 项目会话：联调证据已齐，维持测试服务配置待命。
+6. **xiaobao 项目会话（2026-07-25 新增，最高优先）**：回应 REQ-003 的 5 项——P0 `score_total` 归属冲突择一方案、`l1_status` 枚举订正、`ai_worker` GRANT 就绪确认、schema 迁移落地确认、凭据注入渠道。见[本文件 §4](#req003-db-boundary) 与 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
+7. **ai 项目会话（2026-07-25 新增）**：v0.2 PRD R1 三方 Review（Architect/Developer/DevOps）；O-1 未有结论前不得定稿 PRD。
 5. ~~ai 项目会话：执行 v0.1 迭代关闭检查（联调证据已齐）；后续优化 KB 空结果语义（非阻塞，可入 v0.2 或独立任务）。~~ —— 已完成（2026-07-04，v0.1 已关闭）
 
 ## 元信息变更台账

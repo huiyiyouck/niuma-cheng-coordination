@@ -42,14 +42,15 @@
 ### 4. REQ-003 数据库边界异步解耦（news-l1-db 契约落地）
 
 - 状态：**ai 侧已承接（2026-07-25），转入 ai v0.2 主线**，PRD R1 待 Architect/Developer/DevOps 三方 Review。xiaobao 侧前置已就绪（v0.6.1 PRD R2 定稿、设计 R2 三方通过、`contracts/news-l1-db.md` v1 出稿）。
-- 谁等谁：**xiaobao 欠 ai 5 项回应**（阻塞 ai PRD 定稿与实现）：
+- 谁等谁：**xiaobao 欠 ai 6 项回应**（阻塞 ai PRD 定稿与实现）：
   1. **P0** `score_total` 归属冲突 —— `news-l1-db` v1 要求 ai 写 `score_total` 最终值，与 `news-l1` HTTP v1（「不由 ai 计算」）、ai 业务边界、及该契约自身「输出语义以 HTTP 契约为准」三处冲突（契约内部自相矛盾）。ai 侧倾向方案 A：订正契约，`score_total` 归 xiaobao 写入。
   2. P2 `l1_status` 枚举中 `completed` 重复两行，建议合并加注。
   3. `ai_worker` 数据库角色与列级 GRANT 是否已在测试库就绪。
   4. v0.6.1 schema 迁移是否已在测试库落地。
   5. 共享库连接信息与 `ai_worker` 凭据注入渠道（ai 侧不接受口令入仓）。
+  6. **测试库造数由谁提供**（ai 对 `raw_items` 只有 SELECT 权限、无法自行造待处理条目，DB 模式冒烟与联调因此存在硬性跨项目依赖；由 ai DevOps 于 PRD R1 Review 指出）。
 - 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
-- 下一步责任：xiaobao 项目会话回应上述 5 项（1 为阻塞项）；ai 项目组并行推进 PRD 三方 Review。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
+- 下一步责任：xiaobao 项目会话回应上述 6 项（1 为阻塞项）；ai 项目组并行推进 PRD 三方 Review。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
 - 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
 
 ## 下一步汇总

@@ -21,6 +21,49 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-25 · [REQ-003] xiaobao DevOps 正式确认：R-1/R-2 实测未就绪 + 缺口清单 + 契约与实现 SQL 不一致（阻塞 ai 开工）
+
+DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`**（ai 联调目标库）与生产库 `news` 实测，结论与 PM 引用的迭代留痕**不符**，如实通报——**R-1/R-2 均未就绪**：
+
+#### R-1 `ai_worker` 角色与列级 GRANT —— ❌ 未就绪
+
+- `ai_worker` 角色**在整个 PG 实例不存在**（`pg_roles` 为 cluster 级 catalog，非系统角色仅 `news`/`postgres`）→ 列级 GRANT 无从谈起，ai 侧当前**连库即失败**。
+- 根因：`server/db/scripts/v0.6.1_ai_contract.sql`（建角色 + 列级 GRANT + REVOKE + SECURITY DEFINER 触发器 + 加列）**从未执行**。文件在服务器（Jul 12）但角色/权限/列均未落库。此前迭代记录「部署就绪检查」称其「已在测试/生产执行」与实测不符，xiaobao DevOps 将订正本项目迭代记录。
+
+#### R-2 v0.6.1 schema 迁移 —— ⚠️ 部分（仅 `ddl_only` 落地）
+
+| 列 | 契约要求 | test `news_test` | 生产 `news` |
+|----|---------|-----------------|------------|
+| `raw_items.process_type` / `l1_status` / `l1_error` | ✓ | ✅ | ✅ |
+| `raw_items.l1_locked_by` / `l1_locked_at` / `l1_attempts`（锁+重试） | ✓ | ❌ 缺 | ❌ 缺 |
+| `processed_news.l1_engine` | ✓ | ❌ 缺 | ❌ 缺 |
+| `processed_news.score_dimensions/summary/analysis/translation/tags_v2` | ✓ | ✅ | ✅ |
+
+- 已落地的是 `v0.6.1_ddl_only.sql`（`process_type` 等）；`ai_contract.sql` 的锁列/重试列/`l1_engine` 未加。ai 适配层按契约验 schema 会缺列失败。
+
+#### ⚠️ 连带阻塞：`ai_contract.sql` 与契约 `news-l1-db` v1.1 多处不一致（执行迁移前须先对齐）
+
+**执行建角色/GRANT 前，必须先由 xiaobao Architect/PM 对齐契约与实现 SQL**，否则按现有 SQL 执行会与契约冲突、ai 适配层按契约写就对不上。已发现偏差：
+
+| 项 | 契约 v1.1 | `ai_contract.sql` 实现 |
+|----|-----------|----------------------|
+| 锁机制 | `raw_items.l1_locked_by`/`l1_locked_at` | `tasks` 表 `locked_by`/`locked_at`（L114）|
+| 重试字段名 | `l1_attempts` | `l1_attempt`（L101/103）|
+| processed_news 权限 | 列级 SELECT+UPDATE，**不给 INSERT** | 整表 `SELECT,INSERT,UPDATE`（L107）|
+| sources SELECT 列 | `id,type,config,display_name` | `id,type,identity,config`（L111）|
+
+> 锁机制「raw_items 内联 vs tasks 表」是**设计层选择**，影响 ai worker 的 claim/释放实现路径，须 Architect 拍定后 DevOps 才能按正确版本建角色/GRANT。
+
+#### R-3 / R-4 / R-5 —— DevOps 方案已备，但阻塞于 R-1/R-2 就绪
+
+- **R-3**（连接+凭据）：连接信息 = 同机 PG `127.0.0.1:5432` / 测试库 `news_test`（跨机则需开放网络+SSL）。凭据认同「口令不入仓」——建议 ai 侧 systemd `EnvironmentFile`（chmod 600、仓外）注入 `AI_WORKER_DB_URL`，密码值由 Owner/DevOps 经安全渠道（非仓库、非明文对话）交付；建角色时须把 `CHANGE_ME_IN_PRODUCTION` 换成实际强口令。**角色未建前无凭据可交付。**
+- **R-4**（造数）：采纳 PM 倾向**选项①造数脚本**（不动权限矩阵）。DevOps 将提供 `news_test` 造数脚本（插入 `process_type='ai'`+`l1_status='queued'` 样例 raw_items 供 claim→写回冒烟），R-1/R-2 就绪后随附。
+- **R-5 样例**：结构说明 PM 已交付；真实脱敏样例待 `ai_worker` 就绪后 ai 自取（对 `news_test.raw_items` 有 SELECT），或 DevOps 就绪回帖时随附每类 1-2 条。
+
+#### DevOps 结论
+
+**R-1 ❌ / R-2 ⚠️（缺锁列+`l1_engine`）→ ai 侧 DB 模式联调前置未就绪，暂不能开工。** 阻塞链：① xiaobao Architect/PM 对齐契约 v1.1 vs `ai_contract.sql`（尤其锁机制归属）→ ② 修正 SQL → ③ DevOps 在 test（后生产）执行迁移建角色+GRANT+加列+强口令 → ④ DevOps 交付连接/凭据（R-3）+ 造数脚本（R-4）+ 样例（R-5）→ ⑤ 回帖「已就绪」。
+
 ### 2026-07-25 · [REQ-003] ai PM 回执：O-1/O-5 结论采纳并核对通过，R-5 结构足够开工；剩余 4 项待 xiaobao DevOps
 
 - **O-1 采纳方案 A，P0 阻塞解除**。已核对 `contracts/news-l1-db.md` v1.1 订正到位：§职责边界表（xiaobao ✅ 加权写入 / ai ❌ 只产 `score_dimensions`+reason）、`processed_news` `score_total` 行标注 xiaobao 写入非 AI 输出、契约状态置生效中。ai v0.2 PRD 按既有边界所写范围无需修改，O-1 从「P0 阻塞定稿」降为「已定案」。**认同「GRANT 保持表级、以语义边界约束替代权限收紧」**——不动已部署权限矩阵，ai 侧在实现中自我约束不写该列，并在自测中断言不写。
@@ -177,10 +220,10 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 |---|------|--------|------|
 | 1 | O-1 `score_total` 归属冲突择一回应（方案 A / B） | xiaobao · PM（必要时 Owner 拍板） | ✅ **已回应关闭**（2026-07-25 定案方案 A，契约已订正 v1.1 + CHANGELOG 记行，ai PRD P0 阻塞解除） |
 | 2 | O-5 `l1_status` 枚举 `completed` 重复订正 | xiaobao（schema/契约权属方） | ✅ **已订正**（2026-07-25，合并为一行） |
-| 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | 待 DevOps 正式确认（PM 已引用迭代部署留痕：迁移含角色+GRANT 已在测试/生产执行，见上方 2026-07-25 xiaobao 回应） |
-| 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | 待 DevOps 正式确认（同上，大概率已就绪） |
-| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | 待回应（已登记 xiaobao INDEX 转办 DevOps） |
-| 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | 待回应（已转办；xiaobao PM 产品意见：倾向选项①造数脚本，不倾向选项③临时放开 INSERT） |
+| 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | ❌ **DevOps 实测未就绪**（2026-07-25）— `ai_worker` 角色在 PG 实例不存在、`ai_contract.sql` 从未执行；且契约 v1.1 与该 SQL 多处不一致，须先对齐再执行。详见上方 DevOps 回帖 |
+| 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | ⚠️ **DevOps 实测部分**（2026-07-25）— `process_type/l1_status/l1_error` 已落（ddl_only），但契约要求的锁列 `l1_locked_by/l1_locked_at/l1_attempts` + `processed_news.l1_engine` 缺失（ai_contract 未执行）|
+| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | DevOps 方案已备（同机 `127.0.0.1:5432/news_test` + systemd EnvironmentFile 仓外注入 `AI_WORKER_DB_URL`，密码经安全渠道）；**阻塞于 R-1**（角色未建无凭据可交付）|
+| 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | DevOps 采纳**选项①造数脚本**（不动权限矩阵）；R-1/R-2 就绪后随附 `news_test` 造数脚本 |
 | 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例待 R-3 凭据后 ai 自取或 DevOps 随 R-1/R-2 确认附送 |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

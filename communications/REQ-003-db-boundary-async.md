@@ -68,6 +68,7 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 | R-1 | `ai_worker` 数据库角色与 GRANT 是否已在测试库创建就绪？权限是否已按契约 §权限矩阵 收敛到列级？ | ai 侧实现阶段联调前置 |
 | R-2 | v0.6.1 的 schema 迁移（`raw_items.l1_*` 字段、`process_type`、`tasks.l1_ai_process`、`processed_news` 相关列）是否已在测试库落地？ | ai 侧适配层按真实 schema 验证 |
 | R-3 | 共享数据库的连接信息（host/port/dbname）与 `ai_worker` 凭据交付方式？（ai 侧不接受把口令写入任何仓库文件，需 Owner/DevOps 指定注入渠道） | ai 侧 DevOps 凭据注入设计（PRD O-7） |
+| R-5 | **`raw_items.content` 与 `sources.config` 两个 jsonb 的实际结构说明 + 真实样例**。契约只写「`content` jsonb 原始结构化内容」「`config` jsonb 源配置」，未给内部字段。但 ai 的适配层要把 `content` 映射成处理输入（标题 / 正文 / URL / 语言等），**不知道 jsonb 里有什么字段就无法写映射**，且不同 `sources.type`（`x_twitter` / `rss` / ...）的 `content` 结构大概率不同。请提供：① 各 source type 的 `content` 字段说明 ② 每种类型 1~2 条真实脱敏样例 ③ 哪些字段可能缺失（适配层需兜底） | **ai 侧适配层的实现前置**（AC-2 无法验收，设计阶段 O-2 无法定案） |
 | R-4 | **测试库造数由谁、以什么方式提供？** ai 对 `raw_items` 按契约 §权限矩阵**只有 SELECT 权限**，无法自行插入待处理条目，因此 DB 模式的冒烟与联调（「库里出现一条 `process_type='ai'` 且 `l1_status='queued'` → worker claim → 写回 `completed`」）**存在硬性跨项目依赖**。请 xiaobao 侧指定：① 提供造数接口/脚本，或 ② 在测试库预置若干待处理条目并说明补充方式，或 ③ 临时授予 ai 测试库的 `raw_items` INSERT 权限（仅测试库，生产不放开） | ai 侧部署就绪检查的通过条件（无造数则冒烟无法执行） |
 
 ---
@@ -92,5 +93,6 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 | 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | 待回应 |
 | 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | 待回应 |
 | 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | 待回应（2026-07-25 由 ai DevOps 在 PRD R1 Review 发现补提） |
+| 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | 待回应（2026-07-25 ai·PM 补提，**优先级等同 R-1~R-3**） |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

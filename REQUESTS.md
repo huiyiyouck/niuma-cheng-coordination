@@ -12,7 +12,7 @@
 | 需求 id | 提出方 | 内容 | 承接方 | 转入迭代 | 状态 | 沟通文档 |
 |---------|--------|------|--------|----------|------|----------|
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（已关闭，2026-07-04） | 已关闭 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
-| REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，待启动） | 已承接 | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
+| REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，已完成并随 v0.1 关闭） | 已关闭（2026-06-29 调研完成，2026-07-25 销账） | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
 | REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker 模式 + 适配层封装），翻译保留在 ai 侧 | ai · PM（ck），2026-07-25 承接 | ai v0.2（主线，PRD R1 待三方 Review） | 开发中（转入迭代）；**待 xiaobao 回应 1 个 P0 契约冲突**（`score_total` 归属，见沟通文档 O-1） | [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)（契约：[contracts/news-l1-db.md](contracts/news-l1-db.md)） |
 | REQ-004 | 参谋长（Owner 授权代提，2026-07-18） | 跨项目「在途未响应项」高亮：把台账未同步行、超期无响应的 REQ/BCR 在看板显式高亮/置顶，让 Owner 日常可见，不依赖有人恰好开对会话 | 待 workboard · PM 评估承接 | — | 已提报（2026-07-18） | 待承接后建立 |
 
@@ -39,6 +39,8 @@
 - 承接方：`ai`（AI 处理中枢）· PM（ck）—— Owner 指派，2026-06-29 ai PM 评估正式承接（承接登记由 PM 做，架构方案实质产出归 Architect）
 - 承接说明：承接背景为 Owner 2026-06-29 拍板 ai 定位升级为生态内部通用 AI 处理中枢（见 [decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)）；REQ-002 调研范围相应在「news-l1 真实化架构」基础上增加「生态内部通用骨架」维度
 - 转入迭代：作为 ai v0.1 的**前置架构调研** —— v0.1 PRD 待 REQ-002 架构结论后由 ai PM 创建
+- **完成与关闭（2026-07-25 由 ai · PM 销账）**：ai · Architect 已于 **2026-06-29** 完成调研并产出结论（ai `docs/progress/ad-hoc/2026-06-29-spike-req002-data-architecture.md`）——4 个架构岔路口逐条回答（① L1 用确定性 staged 编排+条件 enrich 闸门 ② L0 规则预过滤+LLM 兜底 ③ 移植 Horizon `client.py` 内核做多 provider 链式 fallback ④ 落盘裁剪为可选 run 记录、不做强重入）、7 个借鉴点落点汇总、生态通用骨架维度补充。结论已作为 ai v0.1 设计输入（ADR-0001 条件图编排 / ADR-0002 ChainedAIClient 均源自此），v0.1 已于 2026-07-04 关闭交付。
+- **销账迟滞说明**：调研 2026-06-29 完成，但本仓状态行与沟通文档待跟进表未同步关闭，滞留「已承接 / 待启动」约 26 天，至 2026-07-25 ai · PM 全仓对齐时才发现补销。与 REQ-003 的 20 天无响应同源——响应侧无时间节拍（REQ-004 覆盖该缺口）。
 - 沟通文档：[communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md)
 - 参考项目（本地）：
   - `Horizon`（`/root/Horizon`，Python + asyncio）—— 重度 LLM，与 Agent Hub 几乎同构，最高借鉴价值

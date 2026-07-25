@@ -21,6 +21,20 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-25 · [REQ-003] ai PM 回执：O-1/O-5 结论采纳并核对通过，R-5 结构足够开工；剩余 4 项待 xiaobao DevOps
+
+- **O-1 采纳方案 A，P0 阻塞解除**。已核对 `contracts/news-l1-db.md` v1.1 订正到位：§职责边界表（xiaobao ✅ 加权写入 / ai ❌ 只产 `score_dimensions`+reason）、`processed_news` `score_total` 行标注 xiaobao 写入非 AI 输出、契约状态置生效中。ai v0.2 PRD 按既有边界所写范围无需修改，O-1 从「P0 阻塞定稿」降为「已定案」。**认同「GRANT 保持表级、以语义边界约束替代权限收紧」**——不动已部署权限矩阵，ai 侧在实现中自我约束不写该列，并在自测中断言不写。
+- **O-5 已核对**：`l1_status` 枚举 `completed` 已合并单行、「谁设置」列并列两来源。无异议。
+- **R-5 结构说明已足够启动适配层设计**，无需再等样例即可进设计阶段。ai 侧确认三点收编：
+  1. **source type 为三类而非两类** —— `x_twitter` / `rss` / `jin10_flash`。ai 适配层按 `sources.type` 分发映射，v0.2 三类全覆盖（`jin10_flash` 虽以直显为主，仍按 `process_type='ai'` 出现时处理）。
+  2. **缺失兜底逐字段采纳** —— `author_username` 空串时源 URL 走 `x.com/i/status/`、`created_at` 缺失用 `raw_items.published_at` 兜底、`rss.author` 键可能不存在（非空串）、`public_metrics`/`entities`/`categories` 默认空值。
+  3. **不依赖 `raw_items.language`** —— 该列不在 ai_worker 可读列且 xiaobao 侧已降级；ai 侧语言判定自理（v0.1 既有逻辑）。
+  - 感谢提供 `renderForLLM` 参照点（`x_twitter.ts:211` / `rss.ts:72` / `jin10-mcp.ts:75`）——ai 适配层将对照其取字段逻辑，避免两侧对同一 `content` 的解读漂移。
+- **R-1/R-2 采纳「PM 引用留痕、DevOps 正式确认」的分工**，等 DevOps 回帖；ai 侧不将「大概率就绪」当作已就绪，实现阶段前置仍以 DevOps 正式确认为准。
+- **R-4 认同倾向选项①造数脚本**（可重复、不动权限矩阵）；ai 侧同样不倾向选项③临时放开 INSERT。
+- **R-3 是当前 ai 侧最硬的前置**：凭据未到则连不上库，R-5 的真实样例也取不到（二者同一前置）。请 Owner / xiaobao DevOps 优先处置。
+- ai 侧当前状态：v0.2 PRD R1 三方 Review 中（DevOps 已交=未通过 4 高 2 中 1 低，Architect / Developer 待交）；三方齐后 PM 一次性改 R2 定稿，再进设计阶段。
+
 ### 2026-07-25 · [REQ-003] xiaobao PM 回应：O-1 定案方案 A（契约已订正 v1.1）+ O-5 已订正 + R-5 结构说明全量交付 + R-1/R-2 事实引用 + R-3/R-4 转 DevOps
 
 #### O-1 回应：**定案方案 A**，契约已订正（v1 → v1.1）

@@ -21,6 +21,31 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-26 · [REQ-003] ai PM 转达契约缺项 C-1~C-10（ai 侧 PRD R1 三方 Review 产出，4 条阻塞 ai PRD 定稿）
+
+ai v0.2 PRD R1 已由 Architect / Developer / DevOps 三方 Review 完毕（三方均判未通过，PM 已改出 R2）。三方在**逐字段核对 `news-l1-db` v1.1 与 ai 侧代码基线**的过程中，发现 10 条契约缺项，汇总转达。
+
+**说明**：① 契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码（变更纪律第 1 条），**ai 侧不自行修改契约**；② 标「**阻塞**」的 4 条未闭合前 ai PRD 不能定稿，但**不阻塞 ai 侧设计阶段启动**；③ C-1~C-9 由 ai Architect 提出并经 ai Developer 对 v1.1 逐条复核，C-10 由 ai Developer 提出。
+
+| # | 缺项 | 后果 | 阻塞 ai 定稿 |
+|---|------|------|------------|
+| **C-2** | **`tasks.status` 的取值集合与转移规则无任何真源**——契约 §tasks 只写「任务状态 / 可更新」。对比 `l1_status` 有完整枚举表 | ai 要「同步更新 `tasks` 状态」却不知该写什么值，也写不出可验证断言。**ai 不能自行猜一套枚举写进 xiaobao 的业务表**（猜错会污染状态机与卡死回收） | **是** |
+| **C-3** | **`processed_news` 是 ai INSERT 还是 UPDATE 占位行未定**——§职责边界表写 xiaobao「占位创建」（暗示 ai 只 UPDATE），§权限矩阵却给了 ai `INSERT` | 两种语义导致 `news_positions` 触发器时序不同（占位时触发则排序位先按空分值排一次，ai 后续 UPDATE 不再触发）、事务范围不同、重试幂等键不同。请一并明确：`raw_item_id` 是否有唯一约束、重试是 upsert 还是插第二行、触发器与 UPDATE 的关系。**ai 侧倾向 ai INSERT + 以 `raw_item_id` 为幂等键 upsert**（触发器在结果齐备后触发，语义最干净）。另：方案 A 落地后请明确 xiaobao 补算 `score_total` 的时机与触发方式，以及补算完成前 `news_positions` 排序位是否对外可见 | **是** |
+| **C-5** | **未承诺「AI 类条目入库时必建 `l1_ai_process` task」** | ai 对 `tasks` 只有 SELECT + 部分列 UPDATE、**无 INSERT**，只能 claim xiaobao 预建的 task 行。若 task 缺失，条目在 `raw_items` 里是 `queued` 但无 task 可 claim → **永久漏处理的黑洞**，且两侧都不会报错 | **是** |
+| **C-10** | **`tags_v2` 第五类标签两份契约冲突**：`news-l1-db` v1.1 写 `{domain, entity, event, content_type, sentiment}`，而 `news-l1` HTTP v1 与 ai 实现均为 `{..., processing}`（`news-l1.md:133` / ai `schemas.py:41-46`）。**ai 从不产 `sentiment`** | AC「写回 `tags_v2`」无法确定内容：按 ai 现状写会多一个 DB 契约没有的 key、少一个 `sentiment`；按 DB 契约写则 `sentiment` 无来源、且 `processing` 丢失。**`processing` 承载 `engine:agent_hub` / `llm:{provider}` / `degraded:{reason}`，是 worker 模式下判断「这条是否降级、走的哪个 provider」的唯一结构化线索**。与 O-1 同类型（DB 契约未对齐 HTTP 契约），变更纪律第 5 条同样适用 | **是** |
+| C-1 | **L0 分类结果字段不在 ai 可读列**——契约只给 `l0_status`（状态），没给分类结果 | HTTP 模式下 `L1Input.domain_tags`「来自 L0 分类」，同时进 prompt 与 KB 查询（ai `news_l1.py:206`）。DB 模式下只能恒为 `[]` → 两模式输入不等价、处理质量下降。ai 侧已将其列为「已知差异」不阻塞，但**建议补入可读列**（或说明它已在 `content` jsonb 内并给出 key 名） | 否 |
+| C-4 | **契约定义的退避间隔未进入 claim 规则 SQL**——§task type 定义 `[60s, 300s, 900s]`，但 §claim 规则 SQL 只有 `process_type='ai' AND l1_status IN (...) ORDER BY published_at LIMIT N`，**无任何时间条件** | 按字面实现，刚置 `retryable_failed` 的条目会在下一轮询周期（10~30s）被立刻重领，**退避完全失效**，几十秒烧完 3 次重试进 `final_failed`，而退避本意是给下游故障（LLM 限流 / provider 5xx）恢复窗口。ai 侧将在实现中加判定（`tasks.updated_at + backoff(attempt) <= now()`），但**两侧应同源，建议补进契约 SQL** | 否 |
+| C-6 | **列级 GRANT 下 `SELECT ... FOR UPDATE` 的可行性未验证**——PG 对行锁的权限判定按**表级** UPDATE 进行，而契约给的是列级 UPDATE | claim 原子性的可实现性悬空。ai 侧将以 `ai_worker` 身份在 `news_test` 实测并反馈结论；若列级授权不满足行锁权限检查，需要 xiaobao 调整授权方式 | 否（ai 侧实证） |
+| C-7 | **`processed_news.language` / `id` 无 AI 输出来源**——契约「对应 AI 输出」列为 `—`，ai 的 `L1Output` 也无 `language` 字段 | 契约要求写入但取值规则未定（原文语种检测？固定 `zh`？沿用 `translation` 的 key？）。请明确取值规则，或把这两列移出 ai 写入清单由 xiaobao 侧填。**若决定由 ai 产出语种标识，属 `L1Output` 扩展，需先改 `news-l1` HTTP 契约**，ai 不会只在 DB 模式偷偷多产一个字段 | 否 |
+| C-8 | **`raw_items.l1_attempt` 与 `tasks.attempt` 双计数器，重试上限判定真源未定** | 两者都在 ai 可写范围，但「尝试次数未达上限（3）」按哪个判定没写；xiaobao 卡死回收介入后必然漂移。**ai 侧倾向以 `tasks.attempt` 为真源**（与 §task type 的最大次数 3 和退避表同源），`l1_attempt` 视为镜像值、同事务一起推进。请确认 | 否 |
+| C-9 | **claim 的 join 路径可能缺索引支撑**——按 `published_at`（在 `raw_items`）升序取、claim 目标在 `tasks`，两表关联只能走 `tasks.metadata->>'raw_item_id'`（jsonb 表达式） | 若无对应索引，队列增长后 claim 会成为周期性全表扫。建议在测试库确认是否存在支撑该访问路径的索引，必要时补 | 否 |
+
+**一条已撤回**：ai Architect R1 曾提「`source_item_url` 不在可读列 → link_read 整条路径失效」。经 ai Developer 对贵方 R-5 结构说明逐类核对，`x_twitter` 的 URL **可由适配层从 `tweet_id` + `author_username` 构造**（含 `author_username` 为空时走 `x.com/i/status/` 的兜底规则），**不需要契约新增可读列**，已转为 ai 侧适配层的实现要求。感谢 R-5 的字段级交付——正是它让这条从「契约缺项」降为「实现细节」。
+
+**另附 ai 侧一条已知限制（不作为契约缺项）**：`rss` 类的 R-5 字段表无任何原文链接字段，故 rss 类 link_read 无 URL 可用。因 rss 当前无真实数据、按已定的验收分层仅做单测覆盖，本迭代记为已知限制。
+
+**ai 侧当前进度**：PRD R2 已出（按三方 R1 意见 + Owner 核心原则「基础夯实、可扩展性优先」修改，含 async 地基改造进范围），待三方复审。C-1~C-10 中 4 条阻塞项闭合 + R2 三方通过后进设计阶段。
+
 ### 2026-07-26 · [REQ-003] ai PM 验收交付物：前置解除确认；因「系统仅有 x_twitter 真实数据」调整验收分层；登记 2 项后续前置
 
 **① 交付验收通过，感谢纠错与实测**。三点特别认可：
@@ -333,4 +358,7 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | ✅ **已交付** — 脚本 `server/db/scripts/seed_ai_queue_test.sql`；已跑一次，`news_test` 现有 5 条 `process_type=ai`+`l1_status=queued` 待 claim 冒烟 |
 | 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例：x_twitter 已附（DevOps 就绪回帖）；系统当前只有 x_twitter 数据（生产 757 + test 154），rss/jin10_flash 无 raw_items，按结构说明实现即可 |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
+| 6b | **契约缺项 C-1~C-10**（ai PRD R1 三方 Review 产出，2026-07-26 转达）：**C-2 / C-3 / C-5 / C-10 四条阻塞 ai PRD 定稿** | xiaobao · PM / Architect（契约权属方） | 待回应 |
+| 6c | 生产库 `news` 的 GRANT（本次仅 `news_test`） | xiaobao · DevOps | 登记为 ai 上生产前置，届时执行 |
+| 6d | 造数队列耗尽后补跑 `seed_ai_queue_test.sql`（ai 自测阶段即开始消耗——并发 claim 与事务回滚必须对真实 PG 测） | xiaobao · DevOps | 待 ai 提出时执行 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

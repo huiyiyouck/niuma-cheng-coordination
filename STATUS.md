@@ -49,12 +49,13 @@
 - **✅ R-1/R-2/R-4/R-5 已就绪交付（2026-07-25 xiaobao DevOps 执行迁移 + 实测验证）**：`ai_worker` 角色已建、列级 GRANT 逐列对照契约一致、端到端实连通过、**越权全部被拒**（`SELECT alerts` / `INSERT raw_items` / `UPDATE process_type` 均 `permission denied`）、`SECURITY DEFINER` 触发器已建；契约要求的列在 `news_test` 全部存在；造数脚本已交付且已预置 5 条 `queued` 待 claim；`x_twitter` 脱敏样例已给。
 - **DevOps 已撤回两处误读**：「契约 vs SQL 四处不一致」与「缺锁列 / `l1_engine`」系误读参照源（错把 xiaobao 侧 `v0.6.1-design.md` 当 coordination 契约），经 grep 实证全部撤回 → ai PM 核对异议成立，阻塞链省去「Architect 拍定锁机制 + 修正 SQL」两环。R-1/R-2 的实测未就绪结论未因此动摇，事实与判断分离，留痕完整。
 - **关键新事实：系统当前只有 `x_twitter` 真实数据**（生产 757 / test 154；`rss` 与 `jin10_flash` 无 `raw_items`、`sources` 仅 4 个 `x_twitter`）。ai 侧据此调整 v0.2 验收分层：三类 type 均实现映射，但 `x_twitter` 要求真实数据端到端验收，`rss`/`jin10_flash` 仅要求单测覆盖并标注「待真实数据补验」——**待 xiaobao 告知两类源近期是否接入真实源**。
-- 谁等谁：**ai 侧 DB 联调前置已解除**。剩余仅 3 项且无一阻塞 v0.2 设计与实现：
+- **新增：契约缺项 C-1~C-10（2026-07-26 ai PM 转达，ai PRD R1 三方 Review 逐字段核对产出）** —— **C-2**（`tasks.status` 枚举无真源）/ **C-3**（`processed_news` INSERT vs UPDATE 未定 + 幂等键 + 触发器时序）/ **C-5**（未承诺「AI 类入库必建 task」→ 永久漏处理黑洞）/ **C-10**（`tags_v2` 第五类 `sentiment` vs `processing` 与 HTTP 契约冲突）**四条阻塞 ai PRD 定稿**；C-1/C-4/C-6~C-9 为建议补齐项。另撤回一条（`source_item_url` 可由适配层构造，R-5 已给规则）。详见沟通文档 2026-07-26 转达帖。
+- 谁等谁：**ai 侧 DB 联调前置已解除**；剩余项无一阻塞 v0.2 设计与实现：
   1. **口令交付 —— 在 Owner 手上**（强口令存服务器 `/root/.secrets/ai_worker_news_test.pw`，root only 不入仓；需 Owner 经安全渠道交付 ai 侧，ai DevOps 按 O-7 拆字段注入）。
   2. **生产库 `news` 的 GRANT 尚未执行**（本次仅 `news_test`，角色 cluster 级已建）→ 登记为 **ai 上生产前置**，由 xiaobao DevOps 届时执行；ai 侧不假定生产已就绪。
   3. **造数队列会耗尽**（预置 5 条），耗尽后由 xiaobao 补跑 `seed_ai_queue_test.sql`；ai 侧联调前打招呼，不做「静默等待队列」误判。
 - 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
-- 下一步责任：**Owner 交付 `ai_worker` 口令**（唯一在途硬项）；ai 项目组推进 PRD R1 剩余两方 Review → R2 定稿 → 设计 → 实现 → 拿到口令后联调冒烟。xiaobao 侧仅需答复「rss/jin10_flash 近期是否接入真实源」，其余两项为届时前置。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
+- 下一步责任：① **Owner 交付 `ai_worker` 口令**；② **xiaobao 回应契约缺项 C-1~C-10**（4 条阻塞 ai PRD 定稿）+ 答复「rss/jin10_flash 近期是否接入真实源」；③ ai 项目组推进 PRD R2 三方复审 → 定稿 → 设计 → 实现 → 联调。生产库 GRANT 与造数补跑为届时前置。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
 - 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
 
 ## 下一步汇总

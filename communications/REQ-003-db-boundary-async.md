@@ -21,6 +21,40 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-25 · [REQ-003] xiaobao DevOps 就绪交付：R-1/R-2 已就绪（迁移执行+端到端验证）+ R-3/R-4/R-5 交付，ai 侧 DB 联调前置解除
+
+已执行 `v0.6.1_ai_contract.sql` 到 `news_test`（`news` 无 CREATEROLE，改用 postgres 超级用户；`CHANGE_ME_IN_PRODUCTION` 已替换强口令、不入仓）。逐项就绪：
+
+#### R-1 ✅ ai_worker 角色 + 列级 GRANT（逐列 verify + 端到端 + 越权拦截）
+
+- 角色 `ai_worker`(LOGIN) 已建；列级 GRANT 逐列对照契约**一致**：raw_items SELECT(8列)+UPDATE(l1_status,l1_error,l1_processed_at,l1_attempt)；processed_news 表级 SELECT/INSERT/UPDATE；sources SELECT(id,type,identity,config)；tasks SELECT+UPDATE(status,locked_by,locked_at,attempt,updated_at,last_error,last_error_kind)。
+- 端到端：ai_worker 实连 `news_test`，SELECT raw_items=154、UPDATE l1_status 通过；**越权全部被拒**（SELECT `alerts` / INSERT `raw_items` / UPDATE 无权列 `process_type` 均 `permission denied`）→ 最小权限验证通过。
+- 触发器 `trg_processed_news_auto_link`(SECURITY DEFINER) 已建：ai INSERT processed_news 后自动关联 news_positions（ai 无 news_positions 写权，触发器代写，契约一致）。
+
+#### R-2 ✅ schema 列已就绪
+
+契约要 ai 可写的 `l1_status/l1_error/l1_processed_at/l1_attempt` + 只读 `process_type/l0_status/published_at/content/id/source_id` 在 `news_test` **全部存在**（v0.6 + ddl_only 已落）。此前「缺锁列/l1_engine」是我误读契约，已撤回。
+
+#### R-3 连接凭据
+
+- 四要素（按 ai O-7 拆字段、不整串 DSN）：`host=127.0.0.1` `port=5432` `dbname=news_test` `user=ai_worker`（ai worker 与 xiaobao **同机**，走 localhost）。
+- **口令**：强口令已存服务器 `/root/.secrets/ai_worker_news_test.pw`（chmod 600 / root only / 不入仓 / 不在本文档）。**请 Owner 经安全渠道交付 ai 侧**。
+
+#### R-4 ✅ 造数脚本（选项①）+ 已预置队列
+
+- 脚本 `server/db/scripts/seed_ai_queue_test.sql`（xiaobao 仓，本次提交），xiaobao 侧执行（ai 无 INSERT 无法自造）。
+- **已跑一次，`news_test` 现有 5 条 `process_type='ai'` + `l1_status='queued'` 待 ai claim 冒烟**（真实 x_twitter 数据 reset）；耗尽后 xiaobao 补跑。
+
+#### R-5 样例
+
+- **系统当前只有 x_twitter 数据**（生产 757 + test 154；rss/jin10_flash 无 raw_items、sources 仅 4 个 x_twitter）。x_twitter `content` 脱敏样例（印证 PM 结构说明）：`{tweet_id, text, author_username, author_name, created_at, public_metrics{like/quote/reply/retweet/bookmark/impression_count}, entities{urls[]}}`。
+- rss/jin10_flash 无真实样例（系统无此类数据）；ai 适配层按 PM R-5 结构说明实现即可。
+
+#### 说明
+
+- 本次仅 `news_test`（ai 联调库）；**生产 `news` 库级 GRANT 待 ai 上生产前另行执行**（角色 cluster 级已建）。
+- 结论：**R-1/R-2 就绪，R-3（口令待 Owner 交付）/R-4/R-5 已交付 → ai 侧 DB 模式联调前置解除，可开工。**
+
 ### 2026-07-25 · [REQ-003] xiaobao DevOps 纠错：撤回「契约四处不一致」（我误读参照源），阻塞链简化为直接执行迁移；R-1/R-2 未就绪维持
 
 ai PM 的核对异议**完全成立**。对 coordination 契约 `news-l1-db.md` grep 精确复核，我上一帖的「契约 v1.1 vs `ai_contract.sql` 四处不一致」系**误读参照源**（错把 xiaobao 侧 `v0.6.1-design.md` 当成 coordination 契约），全部撤回：
@@ -265,10 +299,10 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 |---|------|--------|------|
 | 1 | O-1 `score_total` 归属冲突择一回应（方案 A / B） | xiaobao · PM（必要时 Owner 拍板） | ✅ **已回应关闭**（2026-07-25 定案方案 A，契约已订正 v1.1 + CHANGELOG 记行，ai PRD P0 阻塞解除） |
 | 2 | O-5 `l1_status` 枚举 `completed` 重复订正 | xiaobao（schema/契约权属方） | ✅ **已订正**（2026-07-25，合并为一行） |
-| 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | ❌ **DevOps 实测未就绪**（2026-07-25）— `ai_worker` 角色在 PG 实例不存在、`ai_contract.sql` 从未执行；且契约 v1.1 与该 SQL 多处不一致，须先对齐再执行。详见上方 DevOps 回帖 |
-| 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | ⚠️ **DevOps 实测部分**（2026-07-25）— `process_type/l1_status/l1_error` 已落（ddl_only），但契约要求的锁列 `l1_locked_by/l1_locked_at/l1_attempts` + `processed_news.l1_engine` 缺失（ai_contract 未执行）|
-| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | DevOps 方案已备（同机 `127.0.0.1:5432/news_test` + systemd EnvironmentFile 仓外注入 `AI_WORKER_DB_URL`，密码经安全渠道）；**阻塞于 R-1**（角色未建无凭据可交付）|
-| 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | DevOps 采纳**选项①造数脚本**（不动权限矩阵）；R-1/R-2 就绪后随附 `news_test` 造数脚本 |
-| 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例待 R-3 凭据后 ai 自取或 DevOps 随 R-1/R-2 确认附送 |
+| 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | ✅ **已就绪**（2026-07-25）— 已执行 `ai_contract.sql` 到 `news_test`：`ai_worker` 角色 + 列级 GRANT 逐列对照契约一致 + 端到端连库/越权拦截验证通过。（「契约四处不一致」经复核系我误读参照源，已撤回）|
+| 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | ✅ **已就绪**（2026-07-25）— 契约要 ai 可写的 `l1_status/l1_error/l1_processed_at/l1_attempt` + 只读列在 `news_test` 全部存在。（「缺锁列/l1_engine」系误读契约，已撤回）|
+| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | ✅ **连接四要素已交付**（`127.0.0.1:5432/news_test/ai_worker`，按字段拆分非整串 DSN）；强口令已存服务器 `/root/.secrets/ai_worker_news_test.pw`（chmod 600），**待 Owner 经安全渠道交付 ai** |
+| 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | ✅ **已交付** — 脚本 `server/db/scripts/seed_ai_queue_test.sql`；已跑一次，`news_test` 现有 5 条 `process_type=ai`+`l1_status=queued` 待 claim 冒烟 |
+| 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例：x_twitter 已附（DevOps 就绪回帖）；系统当前只有 x_twitter 数据（生产 757 + test 154），rss/jin10_flash 无 raw_items，按结构说明实现即可 |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

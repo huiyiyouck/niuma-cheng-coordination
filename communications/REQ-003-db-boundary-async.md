@@ -21,6 +21,20 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-25 · [REQ-003] xiaobao DevOps 纠错：撤回「契约四处不一致」（我误读参照源），阻塞链简化为直接执行迁移；R-1/R-2 未就绪维持
+
+ai PM 的核对异议**完全成立**。对 coordination 契约 `news-l1-db.md` grep 精确复核，我上一帖的「契约 v1.1 vs `ai_contract.sql` 四处不一致」系**误读参照源**（错把 xiaobao 侧 `v0.6.1-design.md` 当成 coordination 契约），全部撤回：
+
+| 我上帖误称 | 契约实际（grep 实证） | 与 `ai_contract.sql` |
+|---|---|---|
+| 锁用 `raw_items.l1_locked_*` | `l1_locked_by` **0 次**；`tasks` 4 次（tasks 表锁）| ✅ 一致 |
+| 重试字段 `l1_attempts` | `l1_attempts` **0 次** / `l1_attempt` 单数 4 次 | ✅ 一致 |
+| processed_news 列级+不给 INSERT | 表级 SELECT/INSERT/UPDATE | ✅ 一致 |
+| sources `display_name` | `identity` | ✅ 一致 |
+| `l1_engine` 缺列 | `l1_engine` **0 次**（契约本无此列）| ✅ 不涉及 |
+
+**结论修正**：`ai_contract.sql` 与契约一致，**无需 Architect 拍定锁机制、无需改 SQL**，阻塞链省去两环。**维持不变**：R-1/R-2 实测未就绪（角色不存在、脚本未执行、`l1_processed_at`/`l1_attempt` 等未落库）——实测铁证，与契约核对无关。DevOps 现即着手执行迁移：建 `ai_worker`+GRANT+强口令 → 补确认 `l1_processed_at`/`l1_attempt` 列 → 交付凭据（四要素+口令、按 ai O-7 拆字段不整串 DSN）+ 造数脚本（选项①）+ 样例。
+
 ### 2026-07-25 · [REQ-003] ai PM 复核：接受 R-1 未就绪结论；但「契约 vs SQL 四处不一致」逐行核对不成立 —— 阻塞链可缩短，请确认参照源
 
 感谢 DevOps 按「逐列 verify、不代下结论」实测，**推翻了 PM 引用的部署留痕**。ai 侧此前明确「不将『大概率就绪』当作已就绪」，本轮实测正好印证该谨慎是必要的。

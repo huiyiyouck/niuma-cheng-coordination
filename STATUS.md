@@ -46,13 +46,15 @@
   1. ✅ **O-1 `score_total` 归属 —— 定案方案 A，P0 阻塞解除**。系契约起草笔误（xiaobao `l1-processor.ts` `calcScoreTotal` 加权已部署为既成事实），非边界变更意图。`contracts/news-l1-db.md` 已订正 **v1.1**（职责边界表 + `processed_news` 字段表 + 状态置生效中），CHANGELOG 记行；ai 侧已核对到位并采纳「GRANT 保持表级、以语义边界约束替代权限收紧」。
   2. ✅ **O-5** `l1_status` 枚举 `completed` 已合并单行。
   3. ✅ **R-5 结构说明已全量交付**（三类 source type `x_twitter`/`rss`/**`jin10_flash`** 的 `content` 字段表 + 缺失兜底 + `sources.config` 字段 + `renderForLLM` 参照点）。ai 侧确认足够启动适配层设计、无需等样例；已收编「三类而非两类」「不依赖 `raw_items.language`」两项事实。真实样例与 R-3 凭据同一前置。
+- **R-1/R-2 实测未就绪（2026-07-25 xiaobao DevOps 逐列 verify，推翻 PM 引用的部署留痕）**：`ai_worker` 角色在 PG 实例不存在、`v0.6.1_ai_contract.sql` 从未执行 → ai 侧当前连库即失败；schema 仅 `ddl_only` 落地。
+- **ai PM 复核提出核对异议（2026-07-25）**：DevOps 所列「契约 v1.1 vs `ai_contract.sql` 四处不一致」经逐行核对**均不成立**——契约实际为 `tasks` 表锁、`l1_attempt` 单数、`processed_news` 表级 SELECT/INSERT/UPDATE、`sources` 取 `identity`，**四项与 SQL 一致**；`l1_engine` 在契约中出现 0 次。疑参照源为 xiaobao 侧 `v0.6.1-design.md` 而非 coordination 契约。**若确认成立，阻塞链省去「Architect 拍定锁机制 + 修正 SQL」两环，可直接执行迁移。**
 - 谁等谁：**xiaobao 欠 ai 4 项，全部归 xiaobao DevOps / Owner**（PM 侧已清）：
-  1. **R-3 凭据注入渠道 + 共享库连接信息 —— ai 侧最硬前置**（凭据未到则连不上库，R-5 真实样例亦取不到）。
-  2. R-1 `ai_worker` 角色与列级 GRANT 逐列 verify + 正式确认（PM 已引用 v0.6.1 部署留痕：迁移已在测试/生产执行，大概率就绪；ai 侧不将「大概率」当已就绪）。
-  3. R-2 v0.6.1 schema 迁移测试库落地正式确认（同上）。
+  1. **执行 `v0.6.1_ai_contract.sql`：建 `ai_worker` 角色 + GRANT + 强口令（替换 `CHANGE_ME_IN_PRODUCTION`）** —— R-1 的唯一出路，角色未建则后续全部无法开始。先确认上述核对异议，成立则无需改 SQL、无需 Architect 拍板。
+  2. 补确认 `raw_items.l1_processed_at` / `l1_attempt` 两列在 `news_test` 是否存在（契约 §权限矩阵要求 ai 可写、AC-4 写回依赖，DevOps 对比表未覆盖）。
+  3. **R-3 凭据交付** —— 连接信息已给（同机 `127.0.0.1:5432` / `news_test`，即 ai worker 与 xiaobao 同机部署）；口令待角色建成后经安全渠道交付。ai 侧只需连接四要素 + 口令值，**不必封装成 `AI_WORKER_DB_URL` 整串 DSN**（ai DevOps O-7 已定按字段拆分，防 DSN 被日志/`ps`/驱动异常整串带出）。
   4. R-4 测试库造数方式（双侧 PM 均倾向**选项①造数脚本**，不倾向选项③临时放开 INSERT）。
 - 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
-- 下一步责任：xiaobao **DevOps 会话**处置剩余 4 项（R-3 最优先）；ai 项目组推进 PRD 三方 Review 后改 R2 定稿、进设计阶段（O-1 已解除，设计阶段可按 R-5 结构说明启动适配层设计）。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
+- 下一步责任：xiaobao 侧先裁定 ai PM 的核对异议（参照源问题），成立则直接执行迁移建角色；ai 项目组并行推进 PRD Review → R2 定稿 → 设计阶段。**R-1/R-2 未就绪只阻塞实现阶段联调与冒烟，不阻塞设计阶段（契约 v1.1 + R-5 结构说明已足够），双侧不必互等。**契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
 - 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
 
 ## 下一步汇总
@@ -61,7 +63,7 @@
 2. ai 项目会话：PM 已承接 REQ-001；Owner 确认后由 PM 创建 `v0.1-prd.md` 启动标准迭代，实现 news-l1 真实 L1 处理（stub→真实）。
 3. 任一侧改 news-l1 契约：先改 `contracts/news-l1.md`，CHANGELOG 记一行。
 4. xiaobao 项目会话：联调证据已齐，维持测试服务配置待命。
-6. **xiaobao 项目会话（2026-07-25 新增，最高优先）**：处置 REQ-003 剩余 4 项（**PM 侧已于 2026-07-25 全部回应完毕**，剩余全归 DevOps/Owner）：R-3 凭据与连接信息（最优先）、R-1 GRANT 逐列 verify、R-2 schema 迁移确认、R-4 造数脚本。见[本文件 §4](#req003-db-boundary) 与 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
+6. **xiaobao 项目会话（最高优先）**：① 裁定 ai PM 的核对异议（「契约 vs SQL 四处不一致」经逐行核对不成立，疑参照源为 xiaobao 侧 design 文档）② 成立则直接执行 `v0.6.1_ai_contract.sql` 建 `ai_worker` 角色 + GRANT + 强口令 ③ 补确认 `l1_processed_at`/`l1_attempt` 两列 ④ 交付凭据（四要素+口令，非整串 DSN）+ 造数脚本。见[本文件 §4](#req003-db-boundary) 与 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
 7. **ai 项目会话（2026-07-25 新增）**：v0.2 PRD R1 三方 Review（Architect/Developer/DevOps）；**O-1 已解除**（xiaobao 定案方案 A、契约 v1.1），三方齐后改 R2 定稿→进设计阶段。
 5. ~~ai 项目会话：执行 v0.1 迭代关闭检查（联调证据已齐）；后续优化 KB 空结果语义（非阻塞，可入 v0.2 或独立任务）。~~ —— 已完成（2026-07-04，v0.1 已关闭）
 

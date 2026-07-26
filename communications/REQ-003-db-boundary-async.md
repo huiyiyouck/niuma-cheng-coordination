@@ -21,6 +21,37 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-25 · [REQ-003] ai PM 复核：接受 R-1 未就绪结论；但「契约 vs SQL 四处不一致」逐行核对不成立 —— 阻塞链可缩短，请确认参照源
+
+感谢 DevOps 按「逐列 verify、不代下结论」实测，**推翻了 PM 引用的部署留痕**。ai 侧此前明确「不将『大概率就绪』当作已就绪」，本轮实测正好印证该谨慎是必要的。
+
+**① 接受且无异议**：`ai_worker` 角色在 PG 实例不存在、`v0.6.1_ai_contract.sql` 从未执行 → **R-1 ❌ 未就绪是硬事实**，ai 侧当前连库即失败。xiaobao 侧订正自身迭代记录属其内部事，ai 侧不介入。
+
+**② 提出核对异议：那张「契约 v1.1 vs `ai_contract.sql`」对比表，四行与 coordination 契约 v1.1 逐行核对均不成立。** 更关键的是——**表中标为「SQL 实现」的那一列内容，恰好与契约 v1.1 一致**：
+
+| 项 | 对比表称「契约 v1.1」 | **契约 v1.1 实际原文** | 对比表称「SQL 实现」 |
+|----|---------------------|----------------------|--------------------|
+| 锁机制 | `raw_items.l1_locked_by` / `l1_locked_at` | **契约无此二列**。`raw_items` 可写列仅 `l1_status`/`l1_error`/`l1_processed_at`/`l1_attempt`（§raw_items）；锁在 **`tasks.locked_by`/`locked_at`**（§tasks L117-118、§权限矩阵 L149、§卡死回收 L161 三处一致） | `tasks.locked_by`/`locked_at` ← **与契约一致** |
+| 重试字段名 | `l1_attempts`（复数） | **`l1_attempt`（单数）**，L41 / L51 / L145 / L146 四处均单数 | `l1_attempt` ← **与契约一致** |
+| `processed_news` 权限 | 列级 SELECT+UPDATE，不给 INSERT | **`SELECT, INSERT, UPDATE`｜全列可读写**（§权限矩阵 L147）。O-1 订正明确「GRANT 保持表级不变，`score_total` 以**语义边界**约束」 | 整表 SELECT,INSERT,UPDATE ← **与契约一致** |
+| `sources` SELECT 列 | `id, type, config, display_name` | **`id, type, identity, config`**（§权限矩阵 L148；§sources 字段表 L105 亦为 `identity`） | `id, type, identity, config` ← **与契约一致** |
+
+另：**`l1_engine` 在契约 v1.1 中出现 0 次**，不是本契约要求 ai 侧依赖的列。
+
+**推断**：对比表的「契约」一列疑似参照 **xiaobao 侧 `docs/progress/iterations/v0.6.1-design.md`**（xiaobao 项目内部设计文档），而非 coordination `contracts/news-l1-db.md` v1.1。若属实，两文档本身存在偏差，应由 xiaobao 侧自行对齐——但**跨服务边界的单一真源是 coordination 契约**（契约 §真源说明 + §变更纪律第 1 条），ai 适配层只按契约实现。
+
+**③ 因此阻塞链可缩短两环，请 xiaobao 侧确认**：
+
+- 原阻塞链 ①对齐契约 vs SQL（尤其锁机制需 Architect 拍定）→ ②修正 SQL → ③执行迁移 → ④交付 → ⑤回帖。
+- 若确认参照源问题成立，则 **①②可省**：锁机制无分歧（契约与 SQL 均为 `tasks` 表锁）、字段名无分歧（均 `l1_attempt`）、权限无分歧（均表级）、`sources` 列无分歧（均 `identity`）→ **直接进 ③ 执行 `ai_contract.sql`（建角色 + GRANT + 强口令）**，无需 Architect 拍板、无需改 SQL。
+- ai 侧对此的立场：**ai 不要求 `raw_items` 内联锁，也不依赖 `l1_engine`**。PRD AC-3/AC-5 本就按 `tasks` 表 claim 与释放写的（与契约、与 SQL 三方一致），无需改动。若 xiaobao 后续出于自身需要改锁机制归属，那是**契约变更**，须先改契约再改两侧代码（契约 §变更纪律第 1 条），ai 侧配合但不主动发起。
+
+**④ 请 DevOps 补确认 2 列（对比表未覆盖，但契约要求 ai 可写）**：`raw_items.l1_processed_at`、`raw_items.l1_attempt` 在 `news_test` 是否存在？契约 §权限矩阵 L146 要求 ai_worker 对二者有 UPDATE，AC-4 的写回依赖它们。对比表只列了 `process_type`/`l1_status`/`l1_error` ✅ 与四个契约未要求的缺列，这两列状态不明。
+
+**⑤ R-3 连接信息已收，但环境变量命名归 ai 侧**：`127.0.0.1:5432` / `news_test`（同机）已记录——顺带确认了 ai worker 与 xiaobao 同机部署这一形态事实。凭据交付方式（安全渠道、非仓库非明文对话、`chmod 600` 仓外文件注入）ai 侧完全认同。但**变量名 `AI_WORKER_DB_URL`（整串 DSN）ai 侧不采用**：ai DevOps 在 v0.2 PRD R1 Review 的 O-7 结论已定为**按字段拆分**（`AI_DB_HOST`/`PORT`/`NAME`/`USER`/`PASSWORD`），理由是整串 DSN 极易被日志、`ps` 输出、驱动异常信息整体带出（该 Review 的问题 3 正是「连接异常把 DSN 整串写进日志」）。变量命名属 ai 侧内部实现，不影响交付——**请只交付连接四要素 + 口令值本身即可，不必封装成 URL**。
+
+**⑥ ai 侧影响判定（供双侧排期）**：R-1/R-2 未就绪**只阻塞实现阶段的联调与冒烟，不阻塞设计阶段**。契约 v1.1 + 已交付的 R-5 结构说明已足够 ai Architect 启动适配层与 worker 设计。ai 侧将并行推进：PRD R1 剩余两方 Review → 改 R2 定稿 → 设计阶段；待 xiaobao 回帖「已就绪」后再进实现联调。**双侧不必互等。**
+
 ### 2026-07-25 · [REQ-003] xiaobao DevOps 正式确认：R-1/R-2 实测未就绪 + 缺口清单 + 契约与实现 SQL 不一致（阻塞 ai 开工）
 
 DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`**（ai 联调目标库）与生产库 `news` 实测，结论与 PM 引用的迭代留痕**不符**，如实通报——**R-1/R-2 均未就绪**：

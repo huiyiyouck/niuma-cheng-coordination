@@ -9,8 +9,8 @@
 
 | 项目 | 阶段 | 当前入口 | 备注 |
 |------|------|----------|------|
-| `xiaobao` | v0.6 已上线；v0.6.1 实现 R1（设计文档已定稿，PM/Developer/DevOps R2 全部通过） | 项目 `docs/progress/INDEX.md` | REQ-003 数据库边界契约已出稿，**ai 侧已于 2026-07-25 承接**（转 ai v0.2 主线）；`score_total` 冲突已定案（契约订正 v1.1）；PM 侧回应已清，剩 4 项待 xiaobao DevOps（R-3 凭据最优先）；生产 AI 处理默认关闭（X 直显） |
-| `ai` | v0.1 已关闭（2026-07-04，REQ-001 news-l1 真实化交付）；**v0.2 进行中 — PRD 阶段 R1 待 Architect/Developer/DevOps 三方 Review**（2026-07-25 范围重排，主线为 REQ-003 数据库边界异步解耦）；已接入团队工作流；PM（ck）已承接 REQ-001、REQ-002、REQ-003；定位为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-003 已承接（2026-07-25），O-1 已解除（契约 v1.1）；PRD R1 Review 中（DevOps 未通过），待改 R2；v0.2 顺延项：托管化 / 工具并发 / RunRecord / 多 provider 生产验证 → v0.3；KB 空结果语义已并入 v0.2 |
+| `xiaobao` | v0.6 已上线；v0.6.1 实现 R1（设计文档已定稿，PM/Developer/DevOps R2 全部通过） | 项目 `docs/progress/INDEX.md` | REQ-003 数据库边界契约已出稿，**ai 侧已于 2026-07-25 承接**（转 ai v0.2 主线）；`score_total` 冲突已定案（契约订正 v1.1）；**REQ-003 全部就绪项已交付 ai 侧（2026-07-25）**，仅待答复 rss/jin10_flash 是否接入真实源；生产库 GRANT 待 ai 上生产前执行；生产 AI 处理默认关闭（X 直显） |
+| `ai` | v0.1 已关闭（2026-07-04，REQ-001 news-l1 真实化交付）；**v0.2 进行中 — PRD 阶段 R1 待 Architect/Developer/DevOps 三方 Review**（2026-07-25 范围重排，主线为 REQ-003 数据库边界异步解耦）；已接入团队工作流；PM（ck）已承接 REQ-001、REQ-002、REQ-003；定位为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-003 已承接（2026-07-25），O-1 与 DB 联调前置**均已解除**（契约 v1.1；`ai_worker` 角色/GRANT/造数已就绪，仅待 Owner 交付口令）；PRD R1 Review 中（DevOps 未通过），待改 R2；v0.2 顺延项：托管化 / 工具并发 / RunRecord / 多 provider 生产验证 → v0.3；KB 空结果语义已并入 v0.2 |
 | `workboard` | v0.2 已上线（2026-07-07，读写工作台 5 视图）；v0.3 进行中（设计已定稿 2026-07-18，进实现阶段） | 项目 `docs/progress/INDEX.md` | 本行为补登：workboard 立项（2026-06-17）早于「立项登记三处」规则，状态表历史缺行，参谋长 2026-07-18 补齐 |
 
 ## 跨项目阻塞与谁等谁
@@ -46,15 +46,15 @@
   1. ✅ **O-1 `score_total` 归属 —— 定案方案 A，P0 阻塞解除**。系契约起草笔误（xiaobao `l1-processor.ts` `calcScoreTotal` 加权已部署为既成事实），非边界变更意图。`contracts/news-l1-db.md` 已订正 **v1.1**（职责边界表 + `processed_news` 字段表 + 状态置生效中），CHANGELOG 记行；ai 侧已核对到位并采纳「GRANT 保持表级、以语义边界约束替代权限收紧」。
   2. ✅ **O-5** `l1_status` 枚举 `completed` 已合并单行。
   3. ✅ **R-5 结构说明已全量交付**（三类 source type `x_twitter`/`rss`/**`jin10_flash`** 的 `content` 字段表 + 缺失兜底 + `sources.config` 字段 + `renderForLLM` 参照点）。ai 侧确认足够启动适配层设计、无需等样例；已收编「三类而非两类」「不依赖 `raw_items.language`」两项事实。真实样例与 R-3 凭据同一前置。
-- **R-1/R-2 实测未就绪（2026-07-25 xiaobao DevOps 逐列 verify，推翻 PM 引用的部署留痕）**：`ai_worker` 角色在 PG 实例不存在、`v0.6.1_ai_contract.sql` 从未执行 → ai 侧当前连库即失败；schema 仅 `ddl_only` 落地。
-- **ai PM 复核提出核对异议（2026-07-25）**：DevOps 所列「契约 v1.1 vs `ai_contract.sql` 四处不一致」经逐行核对**均不成立**——契约实际为 `tasks` 表锁、`l1_attempt` 单数、`processed_news` 表级 SELECT/INSERT/UPDATE、`sources` 取 `identity`，**四项与 SQL 一致**；`l1_engine` 在契约中出现 0 次。疑参照源为 xiaobao 侧 `v0.6.1-design.md` 而非 coordination 契约。**若确认成立，阻塞链省去「Architect 拍定锁机制 + 修正 SQL」两环，可直接执行迁移。**
-- 谁等谁：**xiaobao 欠 ai 4 项，全部归 xiaobao DevOps / Owner**（PM 侧已清）：
-  1. **执行 `v0.6.1_ai_contract.sql`：建 `ai_worker` 角色 + GRANT + 强口令（替换 `CHANGE_ME_IN_PRODUCTION`）** —— R-1 的唯一出路，角色未建则后续全部无法开始。先确认上述核对异议，成立则无需改 SQL、无需 Architect 拍板。
-  2. 补确认 `raw_items.l1_processed_at` / `l1_attempt` 两列在 `news_test` 是否存在（契约 §权限矩阵要求 ai 可写、AC-4 写回依赖，DevOps 对比表未覆盖）。
-  3. **R-3 凭据交付** —— 连接信息已给（同机 `127.0.0.1:5432` / `news_test`，即 ai worker 与 xiaobao 同机部署）；口令待角色建成后经安全渠道交付。ai 侧只需连接四要素 + 口令值，**不必封装成 `AI_WORKER_DB_URL` 整串 DSN**（ai DevOps O-7 已定按字段拆分，防 DSN 被日志/`ps`/驱动异常整串带出）。
-  4. R-4 测试库造数方式（双侧 PM 均倾向**选项①造数脚本**，不倾向选项③临时放开 INSERT）。
+- **✅ R-1/R-2/R-4/R-5 已就绪交付（2026-07-25 xiaobao DevOps 执行迁移 + 实测验证）**：`ai_worker` 角色已建、列级 GRANT 逐列对照契约一致、端到端实连通过、**越权全部被拒**（`SELECT alerts` / `INSERT raw_items` / `UPDATE process_type` 均 `permission denied`）、`SECURITY DEFINER` 触发器已建；契约要求的列在 `news_test` 全部存在；造数脚本已交付且已预置 5 条 `queued` 待 claim；`x_twitter` 脱敏样例已给。
+- **DevOps 已撤回两处误读**：「契约 vs SQL 四处不一致」与「缺锁列 / `l1_engine`」系误读参照源（错把 xiaobao 侧 `v0.6.1-design.md` 当 coordination 契约），经 grep 实证全部撤回 → ai PM 核对异议成立，阻塞链省去「Architect 拍定锁机制 + 修正 SQL」两环。R-1/R-2 的实测未就绪结论未因此动摇，事实与判断分离，留痕完整。
+- **关键新事实：系统当前只有 `x_twitter` 真实数据**（生产 757 / test 154；`rss` 与 `jin10_flash` 无 `raw_items`、`sources` 仅 4 个 `x_twitter`）。ai 侧据此调整 v0.2 验收分层：三类 type 均实现映射，但 `x_twitter` 要求真实数据端到端验收，`rss`/`jin10_flash` 仅要求单测覆盖并标注「待真实数据补验」——**待 xiaobao 告知两类源近期是否接入真实源**。
+- 谁等谁：**ai 侧 DB 联调前置已解除**。剩余仅 3 项且无一阻塞 v0.2 设计与实现：
+  1. **口令交付 —— 在 Owner 手上**（强口令存服务器 `/root/.secrets/ai_worker_news_test.pw`，root only 不入仓；需 Owner 经安全渠道交付 ai 侧，ai DevOps 按 O-7 拆字段注入）。
+  2. **生产库 `news` 的 GRANT 尚未执行**（本次仅 `news_test`，角色 cluster 级已建）→ 登记为 **ai 上生产前置**，由 xiaobao DevOps 届时执行；ai 侧不假定生产已就绪。
+  3. **造数队列会耗尽**（预置 5 条），耗尽后由 xiaobao 补跑 `seed_ai_queue_test.sql`；ai 侧联调前打招呼，不做「静默等待队列」误判。
 - 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
-- 下一步责任：xiaobao 侧先裁定 ai PM 的核对异议（参照源问题），成立则直接执行迁移建角色；ai 项目组并行推进 PRD Review → R2 定稿 → 设计阶段。**R-1/R-2 未就绪只阻塞实现阶段联调与冒烟，不阻塞设计阶段（契约 v1.1 + R-5 结构说明已足够），双侧不必互等。**契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
+- 下一步责任：**Owner 交付 `ai_worker` 口令**（唯一在途硬项）；ai 项目组推进 PRD R1 剩余两方 Review → R2 定稿 → 设计 → 实现 → 拿到口令后联调冒烟。xiaobao 侧仅需答复「rss/jin10_flash 近期是否接入真实源」，其余两项为届时前置。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
 - 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
 
 ## 下一步汇总
@@ -63,8 +63,9 @@
 2. ai 项目会话：PM 已承接 REQ-001；Owner 确认后由 PM 创建 `v0.1-prd.md` 启动标准迭代，实现 news-l1 真实 L1 处理（stub→真实）。
 3. 任一侧改 news-l1 契约：先改 `contracts/news-l1.md`，CHANGELOG 记一行。
 4. xiaobao 项目会话：联调证据已齐，维持测试服务配置待命。
-6. **xiaobao 项目会话（最高优先）**：① 裁定 ai PM 的核对异议（「契约 vs SQL 四处不一致」经逐行核对不成立，疑参照源为 xiaobao 侧 design 文档）② 成立则直接执行 `v0.6.1_ai_contract.sql` 建 `ai_worker` 角色 + GRANT + 强口令 ③ 补确认 `l1_processed_at`/`l1_attempt` 两列 ④ 交付凭据（四要素+口令，非整串 DSN）+ 造数脚本。见[本文件 §4](#req003-db-boundary) 与 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
-7. **ai 项目会话（2026-07-25 新增）**：v0.2 PRD R1 三方 Review（Architect/Developer/DevOps）；**O-1 已解除**（xiaobao 定案方案 A、契约 v1.1），三方齐后改 R2 定稿→进设计阶段。
+6. ~~xiaobao DevOps：执行迁移建角色 + GRANT + 交付凭据/造数/样例~~ —— **✅ 已完成（2026-07-25）**，ai 侧 DB 联调前置解除。剩 xiaobao 一问：`rss`/`jin10_flash` 近期是否接入真实源（决定 ai 侧这两类是否需真实数据验收）。
+8. **Owner（最高优先，唯一在途硬项）**：经安全渠道向 ai 侧交付 `ai_worker` 口令（存服务器 `/root/.secrets/ai_worker_news_test.pw`，root only）。口令到位前 ai 侧无法连库联调，但设计与实现不受阻。见[本文件 §4](#req003-db-boundary) 与 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
+7. **ai 项目会话（2026-07-25 新增）**：v0.2 PRD R1 三方 Review（Architect/Developer/DevOps）；**O-1 已解除 + DB 前置已解除**，三方齐后改 R2 定稿→设计→实现→联调（仅待 Owner 交付口令）。
 5. ~~ai 项目会话：执行 v0.1 迭代关闭检查（联调证据已齐）；后续优化 KB 空结果语义（非阻塞，可入 v0.2 或独立任务）。~~ —— 已完成（2026-07-04，v0.1 已关闭）
 
 ## 元信息变更台账

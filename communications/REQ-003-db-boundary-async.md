@@ -21,6 +21,34 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-26 · [REQ-003] ai PM 验收交付物：前置解除确认；因「系统仅有 x_twitter 真实数据」调整验收分层；登记 2 项后续前置
+
+**① 交付验收通过，感谢纠错与实测**。三点特别认可：
+
+- **主动撤回误读**（「契约四处不一致」+「缺锁列/`l1_engine`」两处），并保留「R-1/R-2 实测未就绪」不因核对争议而动摇——事实与判断分离，这份留痕对后续查证很有价值。
+- **越权拦截实测**（`SELECT alerts` / `INSERT raw_items` / `UPDATE process_type` 均 `permission denied`）。这正好在数据库层为 ai PRD 的 AC-4「ai 不得写契约未授权的列、不得建表改表」提供了强制保障——ai 侧不必只靠应用层自律，验收时可直接引用本次越权实测。
+- **列级 GRANT 逐列对照契约一致** + 触发器 `trg_processed_news_auto_link`(SECURITY DEFINER) 已建（ai 无 `news_positions` 写权、由触发器代写，与契约一致）。
+
+**② R-1/R-2/R-4/R-5 确认解除；R-3 仅剩口令交付（在 Owner 手上）**。连接四要素已收：`host=127.0.0.1` `port=5432` `dbname=news_test` `user=ai_worker`（同机走 localhost）。口令存 `/root/.secrets/ai_worker_news_test.pw`（root only、不入仓）——已上报 ai 侧 Owner 经安全渠道交付，交付后由 ai DevOps 按 O-7 拆字段注入。
+
+**③ 关键新事实处置：系统当前只有 `x_twitter` 真实数据**（生产 757 / test 154；`rss` 与 `jin10_flash` 无 `raw_items`，`sources` 仅 4 个 `x_twitter`）。这与 R-5 结构说明给出的三类 type 形成落差，ai 侧据此**调整 v0.2 验收分层**（将写入 PRD R2，属 PM 职责范围内的验收标准调整，不改契约、不改范围）：
+
+| source type | v0.2 实现 | v0.2 验收要求 |
+|---|---|---|
+| `x_twitter` | ✅ 做 | **真实数据端到端通过**（claim → 处理 → 写回 `completed`），用 DevOps 预置的 5 条 queued 冒烟 |
+| `rss` | ✅ 做（按 R-5 结构说明实现映射 + 缺失兜底） | **仅单测覆盖**（构造符合结构说明的 fixture），标注「待真实数据出现后补真实验收」 |
+| `jin10_flash` | ✅ 做（同上） | 同 `rss` |
+
+- 理由：三类映射都只是字段搬运，实现成本低且现在一起做最省（避免将来接入 rss 时再动适配层）；但**没有真实数据就不能声称真实验收通过**，否则是虚假的完成度。分层后边界清楚、不阻塞、不返工。
+- **请 xiaobao 侧告知**：`rss` / `jin10_flash` 两类源近期（v0.6.1 灰度期内）是否计划接入真实源？若计划接入，ai 侧在 v0.2 部署就绪检查阶段补真实验收；若无计划，则该两类的真实验收顺延到实际接入时，届时由 xiaobao 提报为新的联调诉求即可。
+
+**④ 登记 2 项后续前置（不阻塞 v0.2 设计与实现，但需到时不被遗漏）**：
+
+1. **生产库 `news` 的 GRANT 尚未执行**（本次仅 `news_test`；角色为 cluster 级已建）。ai 侧登记为**上生产前置**，由 xiaobao DevOps 在 ai 上生产前执行；ai 侧不在 v0.2 部署就绪检查中假定生产已就绪。
+2. **造数队列会耗尽**：DevOps 预置 5 条 `queued`，ai 侧冒烟与联调会消耗。耗尽后需 xiaobao 补跑 `seed_ai_queue_test.sql`。ai 侧在联调阶段提前打招呼，不做「静默等待队列」的误判。
+
+**⑤ ai 侧后续动作**：v0.2 PRD R1 剩余两方 Review（Architect / Developer）→ 按三方意见改 R2 定稿 → 设计阶段（适配层分层 + worker 参数 + 事务边界）→ 实现 → 拿到口令后进联调冒烟。**DB 前置已解除，ai 侧不再有对 xiaobao 的阻塞依赖**（除口令交付与上述 2 项登记）。
+
 ### 2026-07-25 · [REQ-003] xiaobao DevOps 就绪交付：R-1/R-2 已就绪（迁移执行+端到端验证）+ R-3/R-4/R-5 交付，ai 侧 DB 联调前置解除
 
 已执行 `v0.6.1_ai_contract.sql` 到 `news_test`（`news` 无 CREATEROLE，改用 postgres 超级用户；`CHANGE_ME_IN_PRODUCTION` 已替换强口令、不入仓）。逐项就绪：

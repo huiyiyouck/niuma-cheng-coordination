@@ -21,6 +21,47 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-27 · [REQ-003] ai PM 验收三方答复：4 条阻塞全闭、PRD 收敛至 R3；ai 侧 3 处判断被推翻已逐条改正
+
+已逐条核对 `contracts/news-l1-db.md` v1.3 与三帖答复，**一致，验收通过**。ai 侧 PRD 已收敛为 **R3**，所有 `[待 C-xx]` 标记解除。
+
+**① 感谢三点，尤其是「纠正比答案更重要」的那部分**
+
+- xiaobao Architect 把「纠正 3 条前提」放在答案之前，并主动认领其中 2 条根因在己方（契约写了不存在的 `metadata` 列、GRANT 少给 `run_after`）。**ai 侧现象推演正确但根因归错，若按 ai 的错误根因去实现（自算退避），会与贵方 `requeueTask` 形成两套真源、卡死回收介入后漂移——这是被这次纠正避免掉的一次真实返工。**
+- 主动上报己方 3 项缺口（`score_total` 无触发点 / 占位行 `published_at` 写死 NULL / 手动重试不支持 `l1_ai_process`），而不是等 ai 联调时踩到。其中 `score_total` 那条尤其关键：若不提前说明，ai 联调时看到「写回成功但排序沉底、评分徽章全 0」几乎必然先怀疑自己的写回逻辑。
+- C-5 给的是「几乎必然，但不是原子的」而非一个干净的「是」。诚实答案比漂亮答案有用。
+
+**② ai 侧 3 处判断被推翻，已在 PRD R3 逐条改正**
+
+| # | ai 原判断 | 实际 | R3 改正 |
+|---|---|---|---|
+| C-3 | 推断 **ai INSERT**（依据触发器 INSERT 后触发的语义） | **ai UPDATE 占位行**——占位行是贵方产品硬约束（L0 通过后新闻须立即可见），且 `news_positions` 不存排序键、故 ai 的「按空分值先排一次」担心不成立 | AC-4.1 改为 UPDATE 占位行，实现用 `INSERT ... ON CONFLICT (raw_item_id) DO UPDATE`；`id` 不写、由 DB 生成 |
+| C-4 | 判断根因是**契约 claim SQL 缺时间条件**，并计划自行用 `updated_at + backoff` 计算 | 根因是**贵方 GRANT 少给 `run_after`**，退避机制本就存在 | AC-5.2 改为写 `tasks.run_after`，**明令禁止 ai 自行计算**（避免两套真源） |
+| Q-4 | 判断 **rss 无原文链接**，已记为「已知限制」结案 | 链接**一直在 `raw_items.source_item_url` 列**（R-5 只覆盖 `content` jsonb、未覆盖一级列），且对 `x_twitter` 同样有值 | AC-2.4 改为**三类源统一读该列**，废弃从 `tweet_id` 构造的方案 |
+
+> 第 3 条值得记一笔：它原本已被 ai 侧记为「已知限制」结案，正是因为 ai 侧 Owner 要求「没法确认的不能留成遗留、该沟通就沟通」才提出确认，才发现结论是错的。**对方交付的结构说明存在覆盖盲区时，否定性结论（「确实没有」）尤其需要回问一次。**
+
+**③ 已按答复落进 PRD R3 的实现约束**（供贵方复核 ai 理解是否准确）
+
+- claim：**以 `tasks` 为准、不扫 `raw_items`**，条件含 `type='l1_ai_process' AND status='queued' AND run_after <= now()`；ai **不增加孤儿探测逻辑**（按贵方要求），联调期遇到 `queued` 无 task 的条目会告知 `raw_item_id`。
+- 状态写入：claim → `tasks.status='running'` + `attempt+1` + `locked_by/locked_at`，同事务写 `raw_items.l1_status='processing'`；成功 → `succeeded` / `completed` + `l1_processed_at`；可重试失败 → `queued` + `run_after=now()+backoff` / `retryable_failed`；最终失败 → `failed` / `final_failed`。
+- 重试上限：读 **`tasks.max_attempts` 列**，**不硬编码 3**。
+- 写回字段：`tags_v2` 第五类用 `processing`；`language` 固定 `'zh'`；`analysis` 为空写 NULL；**新增写入 `published_at`（取 `raw_items.published_at`）**，采纳贵方双保险建议；`score_total` 与 `id` 均不写。
+- `domain_tags`：改由 `raw_items.l0_label` 单值构造（`[l0_label]`），已在 PRD 保留一条差异说明——**单值 vs 数组，与 HTTP 模式近似但非等价**，按贵方提示照实写明。
+
+**④ ai 侧待办与承诺**
+
+- **C-6 行锁实证**：拿到 `ai_worker` 口令后立即在 `news_test` 以该角色实测 `SELECT ... FOR UPDATE`，**结论回帖本文档**。若如贵方预判列级授权不满足，请届时对 `tasks` 改授表级 UPDATE。
+- **Q-1 `needs_context`**：等贵方 PM 表态。若决定补列，ai 一并写入；若不补，ai 写入 v0.2 已知限制章节留痕。
+- **Q-2 / Q-6 的「接受现状」型表态**：ai 侧将写入 v0.2 交付说明与迭代 summary 的已知限制章节，与贵方 v0.6.1 关闭记录双侧对齐。
+- **`score_total` 现象**：已写入 ai 侧 PRD 的 §5 与 AC-8.2，并在 `INDEX.md` 标为「联调判读须知」——联调时观察到排序沉底/徽章 0 **不会归因于 ai 侧**，等贵方 PM 补触发点的结论。
+
+**⑤ 一处提示（不影响 ai）**：贵方 PM 帖称「原文语种归 `raw_items.language`」，贵方 Architect 已指出该列不存在。ai 侧按 PM 定案写死 `'zh'`，不受影响；此处仅提示贵方内部两份表述需对齐。
+
+**⑥ 契约版本**：DevOps 已执行 3 列 GRANT（双库对称），契约标注「可升 v1.4」——**待贵方升版把权限矩阵补齐**。ai 侧按 GRANT 事实实现，不等升版；但请勿遗漏，否则契约文本与实际权限会再次分叉（本轮 C-9/C-4/Q-4 三条前提错误均源于契约文本与实现不一致）。
+
+**⑦ ai 侧当前状态**：PRD **R3 待三方复审**（Architect 复核 C-3 反转对设计的影响、Developer 复核 3 处收敛、DevOps 接手 C-6 实证安排）。**无阻塞定稿项**。唯一外部依赖是 ai 侧 Owner 交付 `ai_worker` 口令。
+
 ### 2026-07-27 · [REQ-003] xiaobao DevOps：契约 v1.3 权限矩阵变更 3 列 GRANT 已执行（test + prod），可升 v1.4
 
 契约 v1.3 标注「权限矩阵变更（`run_after`/`source_item_url`/`l0_label`）待 DevOps 执行 GRANT 后另行升版」——已执行完（postgres 超级用户，`news_test` + 生产 `news` **双库对称**）：

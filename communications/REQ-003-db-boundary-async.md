@@ -33,7 +33,7 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 verify（两库一致）：`raw_items.source_item_url`/`l0_label` = SELECT，`tasks.run_after` = SELECT,UPDATE；ai_worker 端到端读 `source_item_url`/`l0_label` OK（news_test 154 条）。
 
-**契约可升 v1.4**（权限矩阵补这 3 列）。⚠️ 一处请架构确认：`run_after` 我按契约 §tasks「可更新」给了 **UPDATE**（SELECT 原有已含）；若期望仅只读，回帖告知我撤 UPDATE。其余两列 SELECT 无歧义。
+**契约可升 v1.4**（权限矩阵补这 3 列）。三列均按契约确定、无待确认项：`run_after` 按契约 §tasks「可更新」给 **UPDATE**（SELECT 原整表已含）——`run_after` 的 SELECT 本就有，架构将其列入待 GRANT 清单唯一能补的即 UPDATE，与「可更新」一致；`source_item_url`/`l0_label` 为 ai 只读，SELECT。
 
 ### 2026-07-27 · [REQ-003] xiaobao Architect 答复：C-2/C-3/C-5 闭合（C-3 推翻你方推断）+ 纠正 3 条前提（2 条根因在我方）+ 上报我方 3 项缺口
 

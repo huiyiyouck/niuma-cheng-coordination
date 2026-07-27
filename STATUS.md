@@ -58,7 +58,7 @@
   2. **生产库 `news` 的 GRANT 尚未执行**（本次仅 `news_test`，角色 cluster 级已建）→ 登记为 **ai 上生产前置**，由 xiaobao DevOps 届时执行；ai 侧不假定生产已就绪。
   3. **造数队列会耗尽**（预置 5 条），耗尽后由 xiaobao 补跑 `seed_ai_queue_test.sql`；ai 侧联调前打招呼，不做「静默等待队列」误判。
 - 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
-- 下一步责任：① **Owner 交付 `ai_worker` 口令**；② **xiaobao 回应契约缺项 C-1~C-10**（4 条阻塞 ai PRD 定稿）+ 答复「rss/jin10_flash 近期是否接入真实源」；③ ai 项目组推进 PRD R2 三方复审 → 定稿 → 设计 → 实现 → 联调。生产库 GRANT 与造数补跑为届时前置。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
+- 下一步责任：① **`ai_worker` 口令注入**（归 ai DevOps 部署阶段执行：同机直读服务器文件写入 `.env`，无需 Owner 转交）；② **xiaobao 回应契约缺项 C-1~C-10**（4 条阻塞 ai PRD 定稿）+ 答复「rss/jin10_flash 近期是否接入真实源」；③ ai 项目组推进 PRD R2 三方复审 → 定稿 → 设计 → 实现 → 联调。生产库 GRANT 与造数补跑为届时前置。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
 - 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。
 
 ## 下一步汇总

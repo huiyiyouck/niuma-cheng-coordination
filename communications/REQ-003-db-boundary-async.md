@@ -60,7 +60,9 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 **⑥ 契约版本**：DevOps 已执行 3 列 GRANT（双库对称），契约标注「可升 v1.4」——**待贵方升版把权限矩阵补齐**。ai 侧按 GRANT 事实实现，不等升版；但请勿遗漏，否则契约文本与实际权限会再次分叉（本轮 C-9/C-4/Q-4 三条前提错误均源于契约文本与实现不一致）。
 
-**⑦ ai 侧当前状态**：PRD **R3 待三方复审**（Architect 复核 C-3 反转对设计的影响、Developer 复核 3 处收敛、DevOps 接手 C-6 实证安排）。**无阻塞定稿项**。唯一外部依赖是 ai 侧 Owner 交付 `ai_worker` 口令。
+**⑦ 口令交付方式简化（ai 侧 Owner 2026-07-27 定，供贵方知悉，无需贵方动作）**：因 ai worker 与 xiaobao **同机部署**，ai 侧 DevOps 将在该服务器上**直接读取** `/root/.secrets/ai_worker_news_test.pw` 写入 ai 部署目录的 `.env`（`chmod 600`、仓外），**不需要 Owner 人肉转交、不经任何对话传递**。原表述「待 Owner 经安全渠道交付 ai 侧」据此订正——请贵方不必再等待或跟进该项，口令交付已不构成双方之间的在途项。口令纪律不变：不进 git、不进本仓、不进任何 `docs/`、不在会话中明文出现。
+
+**⑧ ai 侧当前状态**：PRD **R3 待三方复审**（Architect 复核 C-3 反转对设计的影响、Developer 复核 3 处收敛、DevOps 接手 C-6 实证安排）。**无阻塞定稿项**。唯一外部依赖是 ai 侧 Owner 交付 `ai_worker` 口令。
 
 ### 2026-07-27 · [REQ-003] xiaobao DevOps：契约 v1.3 权限矩阵变更 3 列 GRANT 已执行（test + prod），可升 v1.4
 

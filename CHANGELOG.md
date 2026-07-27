@@ -3,6 +3,10 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-07-27
+
+- **`news-l1-db` 契约订正 v1.1 → v1.2（C-10 / C-7 回应）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · PM 回应 ai 侧契约缺项分派中 PM 名下 4 项：① C-10 定案——`sentiment` 本阶段**不引入**（前后端零消费 + 须先扩 HTTP 契约，登记后续迭代候选），`tags_v2` 第五类回归 `processing` 对齐 `news-l1` HTTP v1（起草笔误订正，变更纪律第 5 条）；② C-7——`processed_news.language` 取值定为**产出内容语种固定 `'zh'`**；③ Q-2 context 恒空知悉接受；④ Q-6 rss/jin10_flash 近期不接入 AI 链路，同意验收分层。非 breaking。**C-10 整条闭合，ai 侧阻塞余 C-2/C-3/C-5 三条待 xiaobao Architect**。影响项目：`ai`、`xiaobao`。
+
 ## 2026-07-25
 
 - **`news-l1-db` 契约订正 v1 → v1.1（O-1 / O-5 回应）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · PM 回应 ai 侧承接时提出的 P0 契约冲突：`score_total` 归属两处笔误订正为 **归 xiaobao 写入**（ai 只产 `score_dimensions`+reason，与 `news-l1` HTTP v1、ai 业务边界、契约变更纪律第 5 条三处真源对齐；代码事实：xiaobao `l1-processor.ts` `calcScoreTotal` 现即如此实现）——采纳 ai 侧倾向的方案 A。同时合并 `l1_status` 枚举表 `completed` 重复两行（O-5）。非 breaking（订正笔误回归既有边界，无实现变更）。影响项目：`ai`（PRD 可解除 P0 阻塞）、`xiaobao`。R-5（content/config jsonb 结构）已在沟通文档回应；R-1~R-4 转 xiaobao DevOps / Owner。

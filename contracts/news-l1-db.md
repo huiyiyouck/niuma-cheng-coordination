@@ -1,11 +1,11 @@
 # 契约：news-l1-db（新闻 L1 数据库边界契约）
 
 - 契约 id：`news-l1-db`
-- 版本：v1.1（2026-07-25 订正 `score_total` 归属笔误 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
+- 版本：v1.2（2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7；`id` 生成方式待 Architect 随 C-3 一并明确。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
 - 状态：生效中（ai 已承接 REQ-003，2026-07-25）
 - schema 权属方：`xiaobao`（拥有建表改表、角色管理、触发器创建权限）
 - worker 方：`ai`（AI 处理中枢 / Agent Hub）
-- 最近更新：2026-07-25
+- 最近更新：2026-07-27
 - 真源说明：本文件是 news-l1 数据库边界契约的**单一真源**。表结构、字段、状态枚举、读写权属变更前先改本文件，再改两侧实现，并在 [../CHANGELOG.md](../CHANGELOG.md) 记一行。
 - 与 HTTP 契约关系：本契约是 [news-l1 v1](news-l1.md) HTTP 契约的**并行新增模式**，非替换。HTTP 模式继续有效（灰度 / 回滚用）。
 - 实现参考：xiaobao `docs/progress/iterations/v0.6.1-design.md` §2 数据模型 + §2.5 数据库角色与权限
@@ -88,8 +88,8 @@ LIMIT N
 | `analysis` | text | 深度分析 | analysis |
 | `score_total` | numeric | 综合分（**xiaobao 写入**：读四维加权计算；ai_worker 不写此列——GRANT 为表级读写，此为语义边界约束） | —（非 AI 输出） |
 | `score_dimensions` | jsonb | 四维评分 + 理由 | score_dimensions |
-| `tags_v2` | jsonb | 五类标签：`{domain, entity, event, content_type, sentiment}` | tags |
-| `language` | varchar | 语言标识 | — |
+| `tags_v2` | jsonb | 五类标签：`{domain, entity, event, content_type, processing}`（与 `news-l1` HTTP v1 一致；`processing` 为运行事实标签，如 `engine:agent_hub` / `degraded:{reason}`。v1.1 及以前的 `sentiment` 系起草笔误，该能力经 PM 裁定本阶段不引入，见沟通文档 C-10） | tags |
+| `language` | varchar | **产出内容语种，固定 `'zh'`**（news-l1 输出契约即中文输出；原文语种不入此列，由 ai_worker 写入，见 C-7） | —（取值规则固定） |
 | `created_at` | timestamptz | 创建时间 | — |
 
 > 说明：`tags` / `importance_score` / `entities` / `bullets` / `source_refs` 等旧字段保留兼容，不在本契约范围内。ai_worker 写入时只需写上述字段即可。

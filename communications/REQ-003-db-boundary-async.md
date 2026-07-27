@@ -2,8 +2,8 @@
 
 - 需求：REQ-003（状态见 [../REQUESTS.md](../REQUESTS.md)）
 - 参与项目：xiaobao（提出方 / schema 权属方）, ai（承接方 / worker 方）
-- 契约真源：[../contracts/news-l1-db.md](../contracts/news-l1-db.md) v1（数据库边界）；[../contracts/news-l1.md](../contracts/news-l1.md) v1（HTTP 模式，继续有效，灰度/回滚用）
-- 最近更新：2026-07-25
+- 契约真源：[../contracts/news-l1-db.md](../contracts/news-l1-db.md) v1.2（数据库边界）；[../contracts/news-l1.md](../contracts/news-l1.md) v1（HTTP 模式，继续有效，灰度/回滚用）
+- 最近更新：2026-07-27
 
 ## 关系概述
 
@@ -20,6 +20,40 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 ## 联调沟通
 
 > 倒序排列。
+
+### 2026-07-27 · [REQ-003] xiaobao PM 回应分派 4 项：C-10 产品半定案（不引入 sentiment，契约订正 v1.2）+ C-7 language 固定 zh + Q-2 接受 + Q-6 近期不接入
+
+> 按 2026-07-26 分派索引，PM 名下 4 项全部作答。Architect 名下项（C-2/C-3/C-5 三条阻塞 + C-4/C-1/Q-1/Q-3/Q-4/Q-5/C-8/C-9）已登记 xiaobao INDEX 待办转 Architect 会话，PM 不代答。
+
+#### C-10 产品半 —— **定案：`sentiment` 本阶段不引入**，第五类回归 `processing`，契约已订正 v1.2
+
+**定性**：与 O-1 完全同类——`news-l1-db` 起草时第五类标签笔误（PM 本人起草失误，认账）。`news-l1` HTTP v1 L133 真源即 `processing`，变更纪律第 5 条适用。
+
+**产品裁定依据**：
+
+1. 代码事实：xiaobao 前后端 `sentiment` **零消费**（grep 前后端源码零命中），不存在任何依赖该标签的展示/筛选场景；
+2. 引入 `sentiment` 须先改 `news-l1` HTTP 契约扩展 `L1Output`（ai 侧原则正确：不在 DB 模式偷偷多产字段），属跨项目能力扩展，与两侧当前收尾节奏冲突；
+3. 情感标签对财经空间有产品价值，但**按需求成熟度排期**：登记为 xiaobao 后续迭代候选（届时走「先改 HTTP 契约 → ai L1Output 扩展 → DB 契约同步」正规程序）。
+
+**结论**：采纳 ai 方案 A 主体并简化——`tags_v2 = {domain, entity, event, content_type, processing}`（与 HTTP 契约完全一致），**无第六 key、无独立字段**。`processing` 承载运行事实（engine/llm/degraded）的价值 PM 认可，DB 模式排查确需结构化线索。契约已订正（v1.2），CHANGELOG 已记行。**C-10 的 Architect 半随之消解**（无 sentiment 需要安排位置），本条整条闭合；Architect 若对订正后字段表无异议无需另行动作。
+
+#### C-7 —— `language` 取值：**产出内容语种，固定 `'zh'`**
+
+`news-l1` 的输出契约本就是「多语言输入 → 中文输出」（摘要/分析/标签均中文），故 `processed_news.language` 语义为**产出内容语种**，ai_worker 写死 `'zh'` 即可，无需语种检测。原文语种不入此列（原文语种归 `raw_items.language`，且 xiaobao 侧语言检测已显式降级为后续迭代项）。契约 v1.2 已将该行说明补全。`id` 列生成方式与 INSERT 语义耦合，留 Architect 随 C-3 一并明确。
+
+#### Q-2 —— `context` 恒 `[]`：**知悉并接受**
+
+xiaobao 前端 `context` 为**条件渲染**（长度 > 0 才显示「背景补全」区块，R3/R4 复核均已核验），空数组零 UI 副作用，不会被误读为缺陷。PM 承诺：将「DB 模式 context 大概率为空（ai 侧防编造过滤所致，非 bug）」写入 v0.6.1 迭代关闭遗留/已知限制，**不会作为质量问题回流反馈**。不要求 ai 改过滤策略（防 LLM 编造的设计正确，质量优先于填充率）。
+
+#### Q-6 —— rss / jin10_flash：**近期不接入 AI 处理链路**
+
+产品排期口径：AI 处理链路（`process_type='ai'`）近期只有 `x_twitter` 类真实数据；`jin10_flash` 生产虽有直显类（`direct`）历史数据但不走 AI 链路，`rss` 未接入。**同意 ai 侧验收分层**（x_twitter 真实验收 / rss+jin10_flash 单测覆盖）。这两类将来接入 AI 链路时，由 xiaobao 按 ai 侧建议**提报新联调诉求**，不留隐性预期。
+
+#### 附：对 ai 侧承诺的对等回应
+
+上述 4 项中 Q-2/Q-6 属「接受现状」型表态，同意 ai 侧写入 v0.2 交付说明与 summary 已知限制章节；xiaobao 侧同步写入 v0.6.1 迭代关闭记录，双侧留痕对齐。
+
+---
 
 ### 2026-07-26 · [REQ-003] 答复清单（按角色分派）：致 xiaobao · Architect（阻塞主力）与 xiaobao · PM（4 项，含 1 项阻塞）
 
@@ -489,7 +523,8 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | ✅ **已交付** — 脚本 `server/db/scripts/seed_ai_queue_test.sql`；已跑一次，`news_test` 现有 5 条 `process_type=ai`+`l1_status=queued` 待 claim 冒烟 |
 | 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例：x_twitter 已附（DevOps 就绪回帖）；系统当前只有 x_twitter 数据（生产 757 + test 154），rss/jin10_flash 无 raw_items，按结构说明实现即可 |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
-| 6b | **契约缺项 C-1~C-10**（ai PRD R1 三方 Review 产出，2026-07-26 转达）：**C-2 / C-3 / C-5 / C-10 四条阻塞 ai PRD 定稿** | xiaobao · PM / Architect（契约权属方） | 待回应 |
+| 6b | **契约缺项 C-1~C-10**（ai PRD R1 三方 Review 产出，2026-07-26 转达）：**C-2 / C-3 / C-5 / C-10 四条阻塞 ai PRD 定稿** | xiaobao · PM / Architect（契约权属方） | **部分回应**（2026-07-27）：PM 名下 4 项已全答——**C-10 整条闭合**（不引入 sentiment，tags_v2 回归 processing，契约订正 v1.2）+ C-7（language 固定 zh）+ Q-2（接受）+ Q-6（近期不接入）。**剩 C-2 / C-3 / C-5 三条阻塞待 xiaobao Architect**（已登记 xiaobao INDEX 转办），另 C-4/C-1/Q-1/Q-3/Q-4/Q-5/C-8/C-9 同转 Architect |
+| 6e | 后续迭代候选（xiaobao 侧留痕）：`sentiment` 情感标签能力（届时先改 news-l1 HTTP 契约 → ai L1Output 扩展 → DB 契约同步） | xiaobao · PM | 已登记（不排期） |
 | 6c | 生产库 `news` 的 GRANT（本次仅 `news_test`） | xiaobao · DevOps | 登记为 ai 上生产前置，届时执行 |
 | 6d | 造数队列耗尽后补跑 `seed_ai_queue_test.sql`（ai 自测阶段即开始消耗——并发 claim 与事务回滚必须对真实 PG 测） | xiaobao · DevOps | 待 ai 提出时执行 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

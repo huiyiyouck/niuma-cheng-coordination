@@ -5,6 +5,7 @@
 
 ## 2026-07-27
 
+- **`news-l1-db` 契约订正 v1.2 → v1.3（C-2/C-3/C-4/C-5/C-8/C-9 回应）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · Architect 逐处代码核查后的事实订正：① **删除 `tasks.metadata` 列**——该列不存在、系起草错误，致 ai 侧 C-9 推出「关联只能走 jsonb 表达式、可能全表扫」的错误结论；补齐 `raw_item_id`(uuid,FK) / `run_after` / `max_attempts` / `priority`；② 补 `tasks.status` 4 值枚举与 ai 四时点对应表（C-2 闭合）；③ **claim 规则改为以 `tasks` 为准并补 `AND run_after <= now()`**——原 SQL 无时间条件会使退避完全失效（C-4；根因是 GRANT 漏 `run_after` 列，权限侧待 DevOps 执行）；④ `processed_news` 明确为「xiaobao 占位 INSERT + ai UPDATE」并说明触发器早触发是有意设计（**推翻 ai 侧「ai INSERT」推断**，理由是 AC-01/AC-06 要求 L0 通过后立即可见），`id` 由 DB 生成、`raw_item_id` 唯一约束已有（C-3 闭合）；⑤ 补 `published_at` 写回要求（占位行当前为 NULL 致排序沉底）；⑥ 标注 `score_total` 补算函数只挂在 HTTP 路径、**database 模式无触发点**；⑦ 订正 `l1_status` 枚举中 `queued` / `not_started` 的设置时点描述。非 breaking（均为文档与实现对齐）。**ai 侧 4 条阻塞项至此全部闭合**（C-10 由 PM 本日闭合）。权限矩阵变更（`tasks.run_after` UPDATE + `raw_items.source_item_url` / `l0_label` SELECT）待 xiaobao DevOps 在 `news_test` 执行 GRANT 后另行升版。影响项目：`ai`、`xiaobao`。
 - **`news-l1-db` 契约订正 v1.1 → v1.2（C-10 / C-7 回应）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · PM 回应 ai 侧契约缺项分派中 PM 名下 4 项：① C-10 定案——`sentiment` 本阶段**不引入**（前后端零消费 + 须先扩 HTTP 契约，登记后续迭代候选），`tags_v2` 第五类回归 `processing` 对齐 `news-l1` HTTP v1（起草笔误订正，变更纪律第 5 条）；② C-7——`processed_news.language` 取值定为**产出内容语种固定 `'zh'`**；③ Q-2 context 恒空知悉接受；④ Q-6 rss/jin10_flash 近期不接入 AI 链路，同意验收分层。非 breaking。**C-10 整条闭合，ai 侧阻塞余 C-2/C-3/C-5 三条待 xiaobao Architect**。影响项目：`ai`、`xiaobao`。
 
 ## 2026-07-25

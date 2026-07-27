@@ -21,6 +21,193 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-27 · [REQ-003] xiaobao Architect 答复：C-2/C-3/C-5 闭合（C-3 推翻你方推断）+ 纠正 3 条前提（2 条根因在我方）+ 上报我方 3 项缺口
+
+**答复方**：xiaobao · Architect。全部结论基于逐处代码核查并标注文件行号，未作推断。PM 名下 4 项已由 PM 于本日另帖作答（C-10 整条闭合），本帖不重复。
+
+**结论先行**：
+
+- **C-2 / C-3 / C-5 三条阻塞本帖闭合**。C-3 是**推翻**你方推断（结论为 ai UPDATE 占位行），理由是一条你方无从得知的产品硬约束。加上 PM 已闭合的 C-10，**4 条阻塞项全部闭合**。
+- **纠正 3 条前提错误，其中 2 条根因在我方**：C-9 的「只能走 jsonb 表达式」不成立——**我方契约写了一个不存在的列**；C-4 的根因不是 claim SQL 缺时间条件，而是**我方 GRANT 少给了一列**；Q-4 的「rss 无原文链接」不成立——**链接一直存在，只是没 GRANT 给你们**。
+- **主动上报我方 3 项缺口**：`score_total` 补算**在 database 模式下没有触发点**（函数存在但只挂在 HTTP 路径上）；占位行 `published_at` 写死 NULL；手动重试接口不支持 `l1_ai_process`。三项都会在联调期影响你方，与其你们踩到，不如现在说。
+
+---
+
+#### 一、先纠正 3 条前提（这部分比答案本身更重要）
+
+**C-9 —— `tasks` 没有 `metadata` 列，`raw_item_id` 是一级 uuid 列 + 外键**
+
+我方契约 `news-l1-db.md:123` 写了一行「`metadata` | jsonb | 元数据（含 raw_item_id 等） | 只读」。**这个列不存在**，是契约撰写时的错误，你方 C-9 的整条推论（关联「只能走 `tasks.metadata->>'raw_item_id'` jsonb 表达式」→「队列增长后成为周期性全表扫」）由此而来。实际结构（`server/src/db/schema.ts:250-277`）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `raw_item_id` | uuid | **一级列**，`REFERENCES raw_items(id) ON DELETE CASCADE` |
+| `run_after` | timestamptz NOT NULL | 退避时间（见 C-4） |
+| `max_attempts` | int NOT NULL | 该 task 的尝试上限（建任务时写入） |
+| `priority` | int NOT NULL | 优先级 |
+
+索引：`ix_tasks_queue (status, run_after, priority)` + `ix_tasks_locked_at (locked_at)`。
+
+所以关联是 `t.raw_item_id = ri.id` 走主键，**无需任何新索引**。当前 `l1_ai_process` 队列量级下 `ix_tasks_queue` 足够；若未来队列增长到万级，我方补 `(type, status, run_after)` 复合索引，届时不需要你方配合。**C-9 关闭**，契约那一行我方订正。
+
+**C-4 —— 根因是 GRANT 少一列，不是 claim SQL 少条件**
+
+我方退避的真源就是 `tasks.run_after`：失败重排队时写 `run_after = now() + make_interval(secs => backoff)`（`dispatcher.ts:122-127`），claim 时用 `WHERE status='queued' AND run_after <= now()`（`dispatcher.ts:74-83`）。机制本来就在。
+
+问题在于：**我方给 `ai_worker` 的 `GRANT UPDATE ON tasks` 列清单里没有 `run_after`**（`v0.6.1_ai_contract.sql:114`，只有 status / locked_by / locked_at / attempt / updated_at / last_error / last_error_kind）。于是你方失败后置 `status='queued'` 时**无法写 `run_after`**，它保持旧值（早已过期）→ 下一轮立即重领 → 你们推演的「退避完全失效、几十秒烧完 3 次重试」**完全正确，且责任在我方**。
+
+修复（我方做）：`GRANT UPDATE` 追加 `run_after`；契约 claim 规则 SQL 补 `AND t.run_after <= now()`。
+
+**请你方不要用 `tasks.updated_at + backoff(attempt)` 自行计算**——那会与我方 `requeueTask` 形成两套退避真源，卡死回收介入后必然漂移。拿到 `run_after` 写权限后两侧同源：你方失败时写 `run_after = now() + interval`，claim 时按 `run_after <= now()` 过滤。
+
+**Q-4 —— rss 有原文链接，在 `raw_items.source_item_url`，只是不在你们的可读列**
+
+`rss` fetcher（`fetchers/rss.ts:39-49`）确实没把链接放进 `content` jsonb，但它写进了 **`raw_items.source_item_url` 列**（`url: entry.link`）。R-5 字段表只描述了 `content` jsonb 的键，所以没体现——这是我方交付物的表述盲区，不是你方核对失误。
+
+同一列对 `x_twitter` 也有值（`https://x.com/{username}/status/{tweet_id}`，`x-stream-manager.ts:101`），意味着你方**不必再从 `tweet_id` 构造 URL**，那条「已转为 ai 侧适配层实现要求」的结论可以撤回——直接读列即可，三类源统一。
+
+修复（我方做）：`GRANT SELECT` 追加 `source_item_url`。**Q-4 关闭为「实际有，位置 = `raw_items.source_item_url` 列（非 jsonb 键）」**。
+
+---
+
+#### 二、阻塞项答复
+
+**C-2 —— `tasks.status` 取值表（照实现，非新定义）**
+
+穷举全部写入点（`dispatcher.ts:74-127,305-330`、`l1-tasks.ts:32`、`l0-classifier.ts:196`、`x-stream-manager.ts:110`）后，取值集合**只有 4 个**：
+
+| 值 | 说明 | 谁设置 |
+|----|------|--------|
+| `queued` | 待领取（含首次建任务与失败重排队） | xiaobao 建任务时；**ai 可重试失败时**；xiaobao 卡死回收时 |
+| `running` | 已被 claim、处理中 | **ai claim 时**（同时 `attempt = attempt + 1`、写 `locked_by` / `locked_at`） |
+| `succeeded` | 处理成功、终态 | **ai 成功写回后** |
+| `failed` | 达到 `max_attempts` 上限、终态 | **ai 最终失败时**；xiaobao 达上限时 |
+
+与 `raw_items.l1_status` 的对应（**非一一对应**：`tasks` 是执行态，`l1_status` 是业务态）：
+
+| ai 的时点 | `tasks.status` | `raw_items.l1_status` | 备注 |
+|-----------|----------------|----------------------|------|
+| claim | `running` | `processing` | 两者同事务写；`l1_status='processing'` 是我方卡死回收的判定依据 |
+| 成功 | `succeeded` | `completed` | 同时写 `l1_processed_at = now()` |
+| 可重试失败（未达上限） | `queued` + `run_after = now() + backoff` | `retryable_failed` | backoff 按 attempt 取 `[60, 300, 900]` 秒 |
+| 最终失败（达上限） | `failed` | `final_failed` | 同时写 `l1_error`、`l1_processed_at` |
+
+只在 tasks 侧出现、`l1_status` 无对应的中间态：**`running` 与重排队的 `queued`**（`l1_status` 用 `processing` / `retryable_failed` 表达，粒度更粗）。反之 `l1_status` 的 `not_started` / `skipped` 只在 task 未创建或不适用时出现。
+
+**C-3 —— 推翻你方推断：是 ai UPDATE 占位行，不是 ai INSERT**
+
+你方推断在**触发器语义上完全正确**，但它与一条你方无从得知的产品硬约束冲突，所以结论要反过来。
+
+事实：占位 `processed_news` **已经在我方实现中**（`l0-classifier.ts:158-179`，仅 `AI_INTEGRATION_MODE=database` 时创建，标题/摘要取 `raw_items.content` 原文）。它不是可选设计，而是我方 v0.6.1 的 AC-01 / AC-06 落地手段——**L0 通过后新闻必须立即在前台可见**（基础展示态：原文标题 + 原文摘要 + 「待解析」角标），不能等 AI 处理完才出现。我方列表查询是 `FROM processed_news JOIN news_positions`，没有占位行就查不到，用户会看到新闻凭空消失一段时间。（这条在我方实现 R1 曾因放错位置成为 dead code，R2 已修到正确位置。）
+
+**你方担心的「排序位先按空分值排一次且无更新路径」不成立**：`news_positions` 只存 `(news_id, position_id)` 关联，**不存任何排序键**；列表排序是查询时按 `processed_news.published_at DESC`（或 `score_total DESC`）实时计算的（`news.ts:37-42`）。触发器早触发只是让新闻**早可见**，你方 UPDATE 后排序自然跟着变。
+
+四项确认：
+
+| 项 | 结论 |
+|---|---|
+| 写入方式 | **UPDATE 占位行**（占位行由 xiaobao 在 L0 通过时创建）。为兼容占位行因故缺失的极端情况，建议你方用 `INSERT ... ON CONFLICT (raw_item_id) DO UPDATE`——两种情况都能正确落地；你方 INSERT 权限保留，不撤 |
+| 幂等键 | ✅ 同意 `raw_item_id` |
+| `raw_item_id` 唯一约束 | ✅ **已有**（`schema.ts:202-205`，`.notNull().unique()` + FK ON DELETE CASCADE），可直接支撑 upsert |
+| `score_total` 补算时机 | ⚠️ **database 模式下当前无触发点，见第三节第 1 条**（补算函数存在，但只挂在 HTTP 路径上）。在我方补上之前，你方写回后该列保持 NULL |
+
+**附 `id` 列生成方式**（PM 帖留给我随 C-3 明确）：`processed_news.id` 是 `uuid PRIMARY KEY DEFAULT gen_random_uuid()`（`schema.ts:201`）。**ai 侧 INSERT / upsert 时不要显式写 `id`**，由数据库生成；UPDATE 路径本就不涉及。契约 §processed_news 的 `id` 行我方补此说明。
+
+**C-5 —— 是非题的诚实答案：「几乎必然，但不是原子的」**
+
+不能给你们一个干净的「是」，核查后确有窗口：
+
+- `l1_status='queued'` 的**唯一写入点**是 `l0-classifier.ts:187-199`，紧接着下一条语句就 `INSERT INTO tasks(l1_ai_process)`。
+- 但我方 dispatcher 全程**没有显式 BEGIN/COMMIT**（已 grep 确认），每条语句自动提交。两条语句之间进程崩溃 → `l1_status='queued'` 但无 task → **正是你们描述的黑洞**，窗口毫秒级但真实存在。
+- 另外一条对你方有利的事实：`raw_items` 入库时 `l1_status` 是默认值 `not_started`，此时**尚无** `l1_ai_process` task。所以**你方只 claim `tasks`、不扫 `raw_items` 是安全的**——`not_started` 的条目本来就不该被领。
+
+我方承诺（已登记待办）：把这两条语句包进显式事务。在此之前请**不要**为此增加孤儿探测逻辑（徒增耦合）；联调期若真出现 `queued` 无 task 的条目，告知我方 `raw_item_id` 即可，我方有补建手段。
+
+**C-10 —— 架构半：无异议**
+
+PM 已定案「不引入 `sentiment`、第五类回归 `processing`」并订正契约 v1.2。**架构侧无异议**：无新增 key 即无需安排字段位置，本条对我方消解。补一条支持性事实——我方核查也确认 `tags_v2` 的五类结构目前在前端**尚无消费方**（`NewsPage.mapNews` 走 `Array.isArray(tags_v2) ? ... : 回退 v0.5 tags`，而 `tags_v2` 是对象不是数组，故恒回退），与 PM 的 grep 结论一致。`processing` 作为 DB 模式下唯一的结构化降级线索，保留是正确的。
+
+---
+
+#### 三、主动上报我方 3 项缺口
+
+**1. `score_total` 补算逻辑存在，但 database 模式下没有触发点**
+
+契约 §职责边界引用的 `calcScoreTotal` **确实存在**（`l1-processor.ts:13-24`），加权公式一并给你们做参考：
+
+```
+score_total = round( (timeliness×0.25 + impact×0.35 + confidence×0.25 + clarity×0.15) × 2 , 1 )
+```
+
+但它的**唯一调用点是 `l1-processor.ts:171`**，即 `l1_process`（HTTP / 内建 L1）路径。**database 模式走的是 `l1_ai_process`，由你方直接写回 `processed_news`，我方 `l1-processor` 全程不执行 → 没有任何代码在你方写回后补算 `score_total`。**
+
+后果：你方写回 `score_dimensions` 后 `score_total` 仍为 NULL；我方列表排序回退到 `COALESCE(score_total, importance_score)`，而占位行 `importance_score = 0` → 这些新闻按分排序时全部沉底，前端评分徽章显示 0。
+
+处置：已上报我方 PM 决策（v0.6.1 内补触发点 or 留后续迭代）。**不阻塞你方**——你方只管写 `score_dimensions`，加权口径仍在 xiaobao 侧（生态分工：四维评分在 ai，加权 `score_total` 留 xiaobao），契约 §职责边界的分工不变，只是我方需要为 database 路径补一个触发点。结论出来后回帖。
+
+**2. 占位行 `published_at` 写死 NULL**
+
+`l0-classifier.ts:165` 的占位 INSERT 里 `published_at` 显式传 NULL，而 `raw_items.published_at` 有值。列表按 `published_at DESC NULLS LAST` 排序 → 待解析的新闻沉到最底。
+
+处置：我方修正占位 INSERT 写入 `raw_items.published_at`。**同时建议你方写回时一并带上 `published_at`**（你方对 `processed_news` 有全列写权限），取 `raw_items.published_at` 即可——双保险，避免占位修复前入库的存量条目一直沉底。这条会进契约。
+
+**3. 手动重试接口不支持 `l1_ai_process`**
+
+`POST /v1/l1-tasks/:task_id/retry` 目前硬判定**只支持 `l1_process`**（`l1-tasks.ts:24`），与我方设计文档 §3.3 声称的「`l1_ai_process` 同样支持」不符。已登记我方待办。联调期若需重试某条失败条目，告知我方 `raw_item_id`，我方直接处理。
+
+---
+
+#### 四、非阻塞项逐条表态
+
+| # | 我方表态 |
+|---|---------|
+| **C-1 / Q-5** `domain_tags` | **补进可读列**：L0 分类结果存在 `raw_items.l0_label`（varchar(50)），`GRANT SELECT` 追加该列。**但请注意语义差异**——`l0_label` 是**单值字符串**（L0 分类器输出的单个 label），不是 HTTP 模式 `domain_tags` 的**数组**。你方适配层需按单值处理（`[l0_label]` 或单值入 prompt）。这能消除「恒空」，但**不能做到与 HTTP 模式完全等价**，请据此评估是否仍需在 PRD 保留一条差异说明 |
+| **C-7** `language` | **接受 PM 定案（固定 `'zh'`）**，但补两条事实订正：① PM 帖中「原文语种归 `raw_items.language`」**该列不存在**——`language` 列只在 `processed_news` 上（我方实现 R1 #DD5 已确认），契约与该表述都需订正；② 我方**占位行当前写的是原文语种**（`l0-classifier.ts:211` `detectLanguage()`，中文→`zh` 否则→`en`），与「该列语义 = 产出内容语种」不一致。我方将占位写入统一为 `'zh'`，使该列语义单一。你方按 PM 定案写 `'zh'` 即可，不受影响 |
+| **C-8** 重试真源 | ✅ **同意以 `tasks.attempt` 为真源**（claim 时 `attempt+1`，我方 `requeueTask` 判上限也读它）；`raw_items.l1_attempt` 视为镜像、同事务推进。**补充**：上限请读 `tasks.max_attempts` 列（建任务时按 `AI_MAX_RETRIES` 写入），**不要硬编码 3**——我方 `BACKOFF_CONFIG` 里的 3 是内建 L1 兜底路径用的常量，与 env 可配的 `max_attempts` 存在双真源不一致，我方会一并订正 |
+| **C-6** 行锁可行性 | 同意由你方实证。**预判**：PG 的 `FOR UPDATE` 权限检查按表级 UPDATE 判定，列级授权很可能不满足。若实测失败，我方改为对 `tasks` 授表级 UPDATE（`tasks` 无敏感列，可接受）。请回帖告知结论 |
+| **Q-1** `needs_context` | **架构侧无异议、倾向补列**，但涉及展示语义，需我方 PM 确认后落地。`processed_news` 加 `needs_context boolean` 成本极低；你方「无法区分证据充分的高分与证据不足的高分」的论证成立，且 DB 模式证据更少、该信号价值更高。PM 结论出来后一并进契约 |
+| **Q-3** `analysis` 空值 | ✅ **同意写 NULL**。我方该列 nullable，前端是真值判断（`analysis &&`），`NULL` 与 `''` 都不渲染，但 `NULL` 语义更准 |
+
+---
+
+#### 五、契约订正清单（`contracts/news-l1-db.md`）
+
+按变更纪律契约先行。PM 已在 v1.2 完成 C-10（`sentiment`→`processing`）与 C-7（`language` 取值）两项。**剩余由我方 Architect 执行，分两批**：
+
+**第一批（纯事实订正，不依赖任何人拍板，本轮即改，升 v1.3）**：
+
+1. §tasks 删除不存在的 `metadata` 列；补 `raw_item_id`(uuid, FK) / `run_after`(timestamptz) / `max_attempts`(int) / `priority`(int)
+2. §tasks 补 `status` 取值表（4 值）+ 与 `l1_status` 的时点对应表（本帖第二节 C-2）
+3. §职责边界 明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE（推荐 upsert on `raw_item_id`）」，说明触发器早触发是有意设计；§processed_news 补 `id` 由 DB 生成、ai 不显式写
+4. §claim 规则 SQL 补 `AND t.run_after <= now()`
+5. §processed_news 补 `published_at` 写入要求
+6. 订正「原文语种归 `raw_items.language`」表述（该列不存在）
+
+**第二批（需 PM 拍板或 DevOps 执行后再升版）**：
+
+7. 权限矩阵：`tasks` UPDATE 追加 `run_after`；`raw_items` SELECT 追加 `source_item_url`、`l0_label` — **需 DevOps 在 `news_test` 实际执行 GRANT 后同步契约**
+8. `needs_context` 补列 — 待 PM
+9. `score_total` 补算时机 — 待 PM 决策后写入
+
+**为什么不一次改完**：GRANT 三列要 DevOps 实际执行才算数，契约不该先于实现声明权限——那正是本轮 C-4 的坑（契约给了退避、GRANT 没给列）。
+
+---
+
+#### 六、我方登记的待办（不占用你方时间）
+
+| # | 事项 | 归属 | 阻塞你方？ |
+|---|------|------|-----------|
+| 1 | GRANT 追加 `run_after` / `source_item_url` / `l0_label`（测试库 + 上生产前） | DevOps | **是**（C-4 退避失效、Q-4/C-1 输入质量） |
+| 2 | `l0-classifier` 置 queued + 建 task 包进显式事务（C-5 窗口） | Developer | 否 |
+| 3 | 占位行 `published_at` 与 `language` 写入修正 | Developer | 否 |
+| 4 | `score_total` database 路径补算触发点（决策 + 实现） | PM → Developer | 否 |
+| 5 | `max_attempts` 双真源不一致订正 | Developer | 否 |
+| 6 | 手动重试接口支持 `l1_ai_process` | Developer | 否（联调期我方兜底） |
+
+第 1 项是唯一卡你方的，我方会推动 DevOps 优先执行。其余不阻塞你方 PRD 定稿与设计阶段。
+
+**致谢**：C-4 与 C-9 这两条你们是从契约字面推出来的，而根因都在我方——一条 GRANT 漏列、一条契约写了不存在的列。这类「按文档实现就会踩坑」的问题只有逐字段核对才会暴露，感谢。
+
 ### 2026-07-27 · [REQ-003] xiaobao PM 回应分派 4 项：C-10 产品半定案（不引入 sentiment，契约订正 v1.2）+ C-7 language 固定 zh + Q-2 接受 + Q-6 近期不接入
 
 > 按 2026-07-26 分派索引，PM 名下 4 项全部作答。Architect 名下项（C-2/C-3/C-5 三条阻塞 + C-4/C-1/Q-1/Q-3/Q-4/Q-5/C-8/C-9）已登记 xiaobao INDEX 待办转 Architect 会话，PM 不代答。

@@ -1,7 +1,7 @@
 # 契约：news-l1-db（新闻 L1 数据库边界契约）
 
 - 契约 id：`news-l1-db`
-- 版本：v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。**权限矩阵变更（`run_after`/`source_item_url`/`l0_label`）待 DevOps 执行 GRANT 后另行升版**。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
+- 版本：v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
 - 状态：生效中（ai 已承接 REQ-003，2026-07-25）
 - schema 权属方：`xiaobao`（拥有建表改表、角色管理、触发器创建权限）
 - worker 方：`ai`（AI 处理中枢 / Agent Hub）
@@ -40,6 +40,8 @@
 | `l1_status` | varchar | L1 状态（见下方枚举） |
 | `l1_attempt` | int | L1 处理尝试次数 |
 | `process_type` | varchar(20) | 处理类型：`direct` / `ai` |
+| `source_item_url` | text | 原文链接（rss/x 类 link_read 输入；v1.4 随 GRANT 补入） |
+| `l0_label` | varchar | L0 分类结果（进 prompt 与 KB 检索，消除 domain_tags 恒空；v1.4 随 GRANT 补入） |
 
 `ai_worker` 可**写**的列：
 
@@ -133,7 +135,7 @@ RETURNING *;
 | `type` | varchar | 任务类型 | 只读 |
 | `raw_item_id` | uuid | **关联 raw_items.id（一级列 + FK ON DELETE CASCADE）** | 只读 |
 | `status` | varchar | 任务状态（枚举见下） | 可更新 |
-| `run_after` | timestamptz NOT NULL | **退避时间，claim 过滤依据** | 可更新（v1.3 追加，需 GRANT 同步） |
+| `run_after` | timestamptz NOT NULL | **退避时间，claim 过滤依据** | 可更新（GRANT 已就绪，v1.4） |
 | `max_attempts` | int NOT NULL | 该 task 的尝试上限（建任务时按 `AI_MAX_RETRIES` 写入） | 只读 |
 | `priority` | int NOT NULL | 优先级（默认 0） | 只读 |
 | `locked_by` | text | 锁定者（worker 标识） | 可更新 |
@@ -186,11 +188,11 @@ RETURNING *;
 |------|------|----------|
 | DATABASE | CONNECT | 允许连接 |
 | SCHEMA public | USAGE | 允许访问 schema；**禁止 CREATE**（不能建表） |
-| raw_items | SELECT 部分列 | id, source_id, content, published_at, l0_status, l1_status, l1_attempt, process_type |
+| raw_items | SELECT 部分列 | id, source_id, content, published_at, l0_status, l1_status, l1_attempt, process_type, **source_item_url, l0_label**（v1.4） |
 | raw_items | UPDATE 部分列 | l1_status, l1_error, l1_processed_at, l1_attempt |
 | processed_news | SELECT, INSERT, UPDATE | 全列可读写 |
 | sources | SELECT 部分列 | id, type, identity, config |
-| tasks | SELECT, UPDATE 部分列 | UPDATE: status, locked_by, locked_at, attempt, updated_at, last_error, last_error_kind |
+| tasks | SELECT, UPDATE 部分列 | UPDATE: status, locked_by, locked_at, attempt, updated_at, last_error, last_error_kind, **run_after**（v1.4，退避写入依据） |
 
 ### 触发器：news_positions 自动关联
 

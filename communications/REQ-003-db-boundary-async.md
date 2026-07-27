@@ -21,6 +21,26 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-27 · [REQ-003] ai PM 转达新增契约缺项 C-11~C-13（ai 侧三方 PRD 复审产出，均非阻塞）
+
+ai 侧 v0.2 PRD 已完成 R3 三方复审并收敛为 R4。复审中 ai Architect 在**实读 xiaobao `schema.ts` 与 `v0.6.1-design.md`** 时发现 3 条契约与 schema 之间的缺口，转达如下。
+
+**三条均不阻塞 ai 定稿与实现**——ai 侧已按明确假设写进验收标准；若贵方确认与假设不符，走 Change Note 调整即可。
+
+| # | 事项 | ai 侧已采用的假设（写进 PRD） | 请确认 |
+|---|------|---------------------------|--------|
+| **C-11** | **`tasks.priority` 的方向语义**：数值大 = 优先，还是相反？**契约与 schema 均未写明**，ai 不做假设式实现。<br>背景：ai 的 claim 在 R4 补回了取件排序（R1 原有「按 `published_at` 升序」，改为只查 `tasks` 后该载体消失、ai 侧漏补，本轮由 ai Architect 抓出）。排序须走贵方的 `ix_tasks_queue(status, run_after, priority)`——该索引形状明确表达了预期访问模式；ai 若不按 `priority` 排序，**贵方设了优先级也不会生效，且不报错、只是顺序不对，联调极难发现**。 | `ORDER BY priority DESC, run_after ASC`（按「数值大 = 优先」编码，代码注释标注待确认） | ☐ 数值大 = 优先 ☐ 数值小 = 优先 ☐ 其他： |
+| **C-12** | **退避数组长度（3）< `max_attempts` 的 schema 默认（5）**：契约 §task type 退避表为 `[60s, 300s, 900s]`，而 `schema.ts:265` `maxAttempts` **默认 5**。第 4、5 次重试 `backoff(attempt)` **越界**——实现要么崩、要么静默退化（取 0 即回到「立刻重领」，**正是 C-4 刚修好的那个问题**）。<br>另：契约 §task type 写「最大尝试次数 **3**」与 schema 默认 **5** 本身不一致；C-8 只解决了「上限读哪里」，未解决这个残留矛盾。ai 无法验证贵方应用层是否每次都显式写入该列——只要有一条 task 走了 schema 默认值，ai 就会遇到 `attempt=4`。 | **`attempt` 超出退避数组长度时取数组末值（900s）**，禁止取 0 或崩溃；已加对应验证用例 | ☐ 补齐退避表到 `max_attempts` 长度（请给新表）<br>☐ 书面确认「超出取末值」<br>☐ 并请订正契约「最大 3」与 schema 默认 5 的不一致 |
+| **C-13** | **① `raw_items.source_item_url` 是否保证带 `http(s)://` 前缀？**（R-5 结构说明未覆盖该列——它是一级列，不在 `content` jsonb 内）<br>影响：ai 的 link_read 触发判定（`tools/link_reader.py:23`）**要求协议前缀**，而另一处填 context 的实现（`news_l1.py:407`）不要求——若该列存无前缀的值（如 `x.com/user/status/123`），会出现「link_read 静默不触发、但 context 里仍填了这个 url」的不一致，且 link_read 失效**不报错、不降级**。<br>**② 请在契约 C-3 相关行登记一句**：`processed_news.raw_item_id` 的唯一约束是 **ai 写回幂等性的前提**（ai 用 `INSERT ... ON CONFLICT (raw_item_id) DO UPDATE`）。若贵方将来放宽该约束（例如为支持重跑允许多版本结果），ai 的 `ON CONFLICT` 会**静默失效并产生重复行**。 | ai 侧**将 URL 规范化为带 `http(s)://` 前缀后再使用，无法规范化的按「无 URL」处理**，两处判定因此一致；已加「有值但无前缀」的验证用例 | ☐ 保证带前缀 ☐ 不保证（ai 侧规范化即可）<br>☐ 同意在契约登记幂等前提 |
+
+**另附：ai 侧复审的两项事实核对结果（供贵方参考，无需动作）**
+
+1. **`tasks.raw_item_id` 为 nullable**（`schema.ts:258` 无 `.notNull()`）。ai 理解这是 `tasks` 作为通用任务表的设计（`type` 区分用途），非疏漏。ai 已在 claim 的 WHERE 中加 `AND raw_item_id IS NOT NULL`——这样异常 task 会留在队列由贵方发现，**而不是被 ai 领走后标成 `failed`**（ai 不把不属于自己的任务标失败）。
+2. **C-6 行锁实证的风险已被 ai 侧自行降级**：ai Architect 给出一条不依赖 `FOR UPDATE` 的 fallback（条件式原子 `UPDATE ... WHERE id IN (...) AND status='queued' RETURNING`，并发退化为阻塞而非跳过，**只需列级 UPDATE 权限**）。因此**即使实证表明列级 GRANT 不支撑 `FOR UPDATE`，ai 也不需要贵方改授表级权限、不阻塞实现**。实证仍会执行并回帖结论，届时是否优化授权由贵方决定。
+
+**ai 侧当前状态**：PRD **R4 待三方复审**，无阻塞定稿项。契约侧 ai 已跟进版本 = **v1.4**。
+
+
 ### 2026-07-27 · [REQ-003] ai PM 验收三方答复：4 条阻塞全闭、PRD 收敛至 R3；ai 侧 3 处判断被推翻已逐条改正
 
 已逐条核对 `contracts/news-l1-db.md` v1.3 与三帖答复，**一致，验收通过**。ai 侧 PRD 已收敛为 **R3**，所有 `[待 C-xx]` 标记解除。

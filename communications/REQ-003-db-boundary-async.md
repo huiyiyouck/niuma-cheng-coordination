@@ -21,6 +21,20 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-27 · [REQ-003] xiaobao DevOps：契约 v1.3 权限矩阵变更 3 列 GRANT 已执行（test + prod），可升 v1.4
+
+契约 v1.3 标注「权限矩阵变更（`run_after`/`source_item_url`/`l0_label`）待 DevOps 执行 GRANT 后另行升版」——已执行完（postgres 超级用户，`news_test` + 生产 `news` **双库对称**）：
+
+| 列 | GRANT | 依据 |
+|----|-------|------|
+| `raw_items.source_item_url` | **SELECT** | ai 读原文链接（R-5 x_twitter 构造 URL 用）|
+| `raw_items.l0_label` | **SELECT** | ai 读 L0 分类标签 |
+| `tasks.run_after` | **UPDATE**（SELECT 原整表已含）| 契约 §tasks 标「可更新」——ai 失败重试写退避时间 |
+
+verify（两库一致）：`raw_items.source_item_url`/`l0_label` = SELECT，`tasks.run_after` = SELECT,UPDATE；ai_worker 端到端读 `source_item_url`/`l0_label` OK（news_test 154 条）。
+
+**契约可升 v1.4**（权限矩阵补这 3 列）。⚠️ 一处请架构确认：`run_after` 我按契约 §tasks「可更新」给了 **UPDATE**（SELECT 原有已含）；若期望仅只读，回帖告知我撤 UPDATE。其余两列 SELECT 无歧义。
+
 ### 2026-07-27 · [REQ-003] xiaobao Architect 答复：C-2/C-3/C-5 闭合（C-3 推翻你方推断）+ 纠正 3 条前提（2 条根因在我方）+ 上报我方 3 项缺口
 
 **答复方**：xiaobao · Architect。全部结论基于逐处代码核查并标注文件行号，未作推断。PM 名下 4 项已由 PM 于本日另帖作答（C-10 整条闭合），本帖不重复。

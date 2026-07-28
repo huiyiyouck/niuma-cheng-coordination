@@ -21,6 +21,81 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-28 · [REQ-003] ai DevOps 实机验证回执：R-3 口令注入完成 + **2 项实测发现（1 项阻塞 C-6 实证）** + KB token 待确认
+
+ai 侧已在服务器（与贵方同机）完成部署环境准备与 `ai_worker` 口令注入，并以 `ai_worker` 身份实连 `news_test` 做了权限与数据验证。**权限矩阵与契约 v1.4 完全一致**，但实测数据暴露 2 项此前隔着契约看不出来的问题，其中 1 项阻塞 C-6 行锁实证。
+
+**一、R-3 回执：口令注入已完成（可置闭合）**
+
+按 Owner 2026-07-27 定的「同机直读」方式，从 `/root/.secrets/ai_worker_news_test.pw` 直读注入 ai 部署目录 `.env`（`chmod 600`、仓外、全程未回显未落日志），按 O-7 拆字段为 `AI_DB_HOST/PORT/NAME/USER/PASSWORD`，未使用整串 DSN。
+
+以 `ai_worker` 实连 `news_test` 六项验证全过：
+
+| # | 验证 | 结果 |
+|---|------|------|
+| 1 | 连接与身份 | ✅ `ai_worker` / `news_test` |
+| 2 | 读 `raw_items` 授权列 | ✅ 5 条 `process_type='ai' AND l1_status='queued'`（与 R-4 交付一致） |
+| 3 | 读 v1.3 新增 GRANT 的 `source_item_url` / `l0_label` | ✅ 154 条两列均非空 |
+| 4 | 读 `tasks` | ✅ 可读 |
+| 5 | 越权对照 `SELECT ... FROM alerts` | ✅ `permission denied for table alerts` |
+| 6 | 越权对照 `UPDATE raw_items SET process_type` | ✅ `permission denied for table raw_items` |
+
+**贵方 DevOps 交付的 GRANT 与越权拦截，ai 侧独立复验通过，无出入。**
+
+**二、发现 A（阻塞级）｜`tasks` 表中 `type='l1_ai_process'` 记录数为 0，R-4 预置的 5 条队列按契约 claim 规则领不到**
+
+实测 `news_test` 的 `tasks` 全表 211 行，type 分布：
+
+| type | status | 条数 |
+|---|---|---|
+| `fetch` | succeeded / failed | 52 / 4 |
+| `l0_classify` | failed | 8 |
+| `l1_process` | succeeded | 1 |
+| `process` | succeeded | 146 |
+| **`l1_ai_process`** | — | **0** |
+
+而 `raw_items` 确有 5 条 `process_type='ai' AND l1_status='queued'`。两者对不上。
+
+按契约 v1.4 的 claim 规则（`t.type='l1_ai_process' AND t.status='queued' AND t.run_after <= now()`），且贵方 Architect 已明确「ai 只 claim `tasks` 不扫 `raw_items` 是安全的、**不需要**孤儿探测」——则这 5 条预置数据对 worker **完全不可见**，冒烟会表现为「worker 活着、队列为空」。
+
+**对 C-6 的连带影响更麻烦**：C-6 实证 SQL 是 `SELECT ... FROM tasks WHERE type='l1_ai_process' AND status='queued' ... FOR UPDATE SKIP LOCKED`，当前必然返回 **0 行**。而 PostgreSQL 在 **0 行时不会触发 `FOR UPDATE` 的权限检查**——实证会得到一个**假的「通过」**，恰好把贵方 Architect 预判的「列级授权可能不满足行锁」这个核心问题掩盖过去。
+
+> 说明：这**不是** C-5 那个「`l1_status='queued'` 与 `INSERT INTO tasks` 之间的毫秒级窗口」（那条贵方已承诺包进事务）。这是 `seed_ai_queue_test.sql` 只造了 `raw_items`、**未造配套的 `l1_ai_process` task 行**。
+
+**请贵方 DevOps 确认三点**：
+1. 造数脚本是否遗漏建 task？需为这 5 条补建，或修脚本后重跑。
+2. 正式链路中 `l1_ai_process` task 由谁在何时创建（L0 通过后的应用层？）——ai 侧据此判断冒烟数据是否具备代表性。
+3. **type 字面量到底是 `l1_ai_process` 还是 `l1_process`**？表中已存在后者 1 条 `succeeded`，而契约与 ai PRD 用的是前者。若实际链路写的是 `l1_process`，则 ai 的 claim 条件需要改。
+
+**三、发现 B（高）｜`l0_label` 在真实数据中只有 `direct_display` 一个取值，C-1 的闭合结论需要重新评估**
+
+| 库 | `l0_label` 取值分布 |
+|---|---|
+| `news_test` | `direct_display` × 154（**唯一取值**） |
+| 生产 `news` | `direct_display` × 637、`NULL` × 120（**同样只有这一个非空值**） |
+
+C-1 此前的闭合结论是「已 GRANT `raw_items.l0_label`（SELECT）→ ai 的 `domain_tags` **不再恒空**」，ai 侧据此在 PRD AC-8.2 记为「单值 varchar，语义**近似**但非等价」。**实测数据不支持这个判断**：`l0_label` 看起来是**流程标记**（L0 判定为「直接展示」），而非领域分类结果，全库无第二个取值。
+
+后果对 ai 侧是实质性的：`domain_tags` 会恒为 `['direct_display']`，而该字段会流进 **prompt** 与**回调贵方 `/v1/kb-search` 的检索查询**。相比「恒空」这更糟——恒空时 ai 代码里的 `domain_tags or None` 会把它归零并正确忽略，而 `['direct_display']` 是真值、拦不掉，等于把一个无信息量的流程标记当领域标签送进推理与检索。
+
+**ai 侧拟采取的处置（先自保，不等回复）**：入向映射把 `direct_display` **视同无分类、映射为 `[]`**（与 NULL / 空串同等处理）。这不影响贵方任何数据。
+
+**请贵方确认两点**：
+1. `l0_label` 是否还有其它取值（是否存在尚未启用的分类枚举）？
+2. 是否另有列承载真正的 L0 领域分类结果？若有且愿意 GRANT，ai 的 `domain_tags` 才能真正具备与 HTTP 模式相当的语义。
+
+**四、`KB_ADMIN_TOKEN` 待确认（联调前置）**
+
+ai 沿用的 v0.1 部署 `.env` 中 **`KB_ADMIN_TOKEN` 为空**。v0.1 时期 KB 检索由贵方**预取上下文**传入，ai 主动回调 `/v1/kb-search` 只是补充路径，token 为空未暴露问题（2026-07-04 联调 4 条用例含 KB 命中，当时通过）。
+
+但 **DB 模式下这条路径的地位变了**：贵方不再预取上下文（契约边界只到数据库），KB 检索**只能由 ai 主动发起**，回调 `/v1/kb-search` 从补充路径变为**常用路径**，`tool_summary.kb_search` 计数会从 0 变为常态 ≥1。
+
+**请贵方确认**：
+1. `/v1/kb-search` 当前是否校验 `x-admin-token`？若校验，请提供 test 环境可用的 token（**走带外渠道或直接放到同机 `/root/.secrets/` 下告知路径即可，不要贴进本文档或任何 git 仓库**——与 `ai_worker` 口令同纪律）。
+2. 若不校验，请明确说明，ai 侧据此在配置与文档中标注「test 环境无需 token」，避免后续误判为配置遗漏。
+
+> 另附一条 ai 侧实测印证 **C-12**：`tasks` 表实际 `max_attempts=5`、`priority=100`（取自既有 `l1_process` 行），与契约文字「最大尝试 3」确实不一致。ai 侧 PRD AC-5.1 已定「读 `tasks.max_attempts` 列、禁止硬编码 3」，方向不受影响。
+
 ### 2026-07-27 · [REQ-003] ai PM 转达新增契约缺项 C-11~C-13（ai 侧三方 PRD 复审产出，均非阻塞）
 
 ai 侧 v0.2 PRD 已完成 R3 三方复审并收敛为 R4。复审中 ai Architect 在**实读 xiaobao `schema.ts` 与 `v0.6.1-design.md`** 时发现 3 条契约与 schema 之间的缺口，转达如下。
@@ -783,7 +858,7 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 2 | O-5 `l1_status` 枚举 `completed` 重复订正 | xiaobao（schema/契约权属方） | ✅ **已订正**（2026-07-25，合并为一行） |
 | 3 | R-1 `ai_worker` 角色与列级 GRANT 就绪确认 | xiaobao · DevOps | ✅ **已就绪**（2026-07-25）— 已执行 `ai_contract.sql` 到 `news_test`：`ai_worker` 角色 + 列级 GRANT 逐列对照契约一致 + 端到端连库/越权拦截验证通过。（「契约四处不一致」经复核系我误读参照源，已撤回）|
 | 4 | R-2 v0.6.1 schema 迁移测试库落地确认 | xiaobao · DevOps | ✅ **已就绪**（2026-07-25）— 契约要 ai 可写的 `l1_status/l1_error/l1_processed_at/l1_attempt` + 只读列在 `news_test` 全部存在。（「缺锁列/l1_engine」系误读契约，已撤回）|
-| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | ✅ **连接四要素已交付**（`127.0.0.1:5432/news_test/ai_worker`，按字段拆分非整串 DSN）；强口令已存服务器 `/root/.secrets/ai_worker_news_test.pw`（chmod 600），**待 Owner 经安全渠道交付 ai** |
+| 5 | R-3 共享库连接信息与凭据注入渠道 | Owner / DevOps 双侧 | ✅ **已闭合**（2026-07-28）— 连接四要素 + 强口令均已就位；ai DevOps 已按「同机直读」注入部署 `.env`（拆字段、chmod 600、未回显），并以 `ai_worker` 实连 `news_test` 六项验证全过（含越权双拒绝），**权限矩阵与契约 v1.4 一致** |
 | 5b | **R-4 测试库造数方式**（ai 只有 `raw_items` SELECT 权限，无造数则 DB 模式冒烟无法执行） | xiaobao · DevOps | ✅ **已交付** — 脚本 `server/db/scripts/seed_ai_queue_test.sql`；已跑一次，`news_test` 现有 5 条 `process_type=ai`+`l1_status=queued` 待 claim 冒烟 |
 | 5c | **R-5 `raw_items.content` / `sources.config` jsonb 结构说明 + 各 source type 真实样例**（适配层映射的实现前置，不给结构无法写映射、AC-2 无法验收） | xiaobao · PM / Architect | ✅ **结构说明已交付**（2026-07-25 见上方回应：三类 type 字段表 + 缺失兜底 + config 字段 + renderForLLM 参照）；真实样例：x_twitter 已附（DevOps 就绪回帖）；系统当前只有 x_twitter 数据（生产 757 + test 154），rss/jin10_flash 无 raw_items，按结构说明实现即可 |
 | 6 | ai v0.2 PRD R1 三方 Review（Architect/Developer/DevOps） | ai 项目组 | 进行中（DevOps 已交：未通过，4 高 2 中 1 低；Architect / Developer 待做） |
@@ -791,4 +866,7 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 6e | 后续迭代候选（xiaobao 侧留痕）：`sentiment` 情感标签能力（届时先改 news-l1 HTTP 契约 → ai L1Output 扩展 → DB 契约同步） | xiaobao · PM | 已登记（不排期） |
 | 6c | 生产库 `news` 的 GRANT（本次仅 `news_test`） | xiaobao · DevOps | 登记为 ai 上生产前置，届时执行 |
 | 6d | 造数队列耗尽后补跑 `seed_ai_queue_test.sql`（ai 自测阶段即开始消耗——并发 claim 与事务回滚必须对真实 PG 测） | xiaobao · DevOps | 待 ai 提出时执行 |
+| 6f | **发现 A（阻塞级）`tasks` 表 `type='l1_ai_process'` 记录数为 0** —— R-4 预置的 5 条 `raw_items` 无配套 task，按契约 claim 规则领不到；且实证 SQL 返回 0 行时 PG 不触发 `FOR UPDATE` 权限检查，**会让 C-6 得出假的「通过」**。请确认：① 造数脚本是否遗漏建 task（需补建或修脚本重跑）② 正式链路中 task 由谁何时创建 ③ **type 字面量是 `l1_ai_process` 还是表中已有的 `l1_process`** | xiaobao · DevOps | **待确认（阻塞 C-6 实证）** — ai DevOps 2026-07-28 实机发现 |
+| 6g | **发现 B（高）`l0_label` 真实数据只有 `direct_display` 一个取值**（test 154 条全是它；生产 637 条 + 120 NULL，无第二个非空值）—— 它是流程标记而非领域分类，**C-1「domain_tags 不再恒空」的闭合结论需重估**；ai 侧 `domain_tags` 会恒为 `['direct_display']` 且因是真值拦不掉，会污染 prompt 与回调贵方 `/v1/kb-search` 的查询。请确认：① 是否还有其它取值 ② 是否另有列承载真正的 L0 领域分类结果 | xiaobao · PM / Architect | **待确认** — ai 侧先自保：入向映射把 `direct_display` 视同无分类映射为 `[]`（不影响贵方数据） |
+| 6h | **`KB_ADMIN_TOKEN` 是否需要** —— DB 模式下贵方不再预取上下文，KB 检索**只能由 ai 主动回调 `/v1/kb-search`**，该路径从补充变为常用。请确认 ① 是否校验 `x-admin-token`；若校验请**走带外渠道或放同机 `/root/.secrets/` 下告知路径**（与 `ai_worker` 口令同纪律，不贴进文档或 git）② 若不校验请明确说明，ai 侧据此标注「test 环境无需 token」 | xiaobao · DevOps | **待确认（联调前置）** — ai 侧 `.env` 中该值当前为空 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

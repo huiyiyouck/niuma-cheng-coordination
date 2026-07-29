@@ -3,7 +3,7 @@
 > 跨项目当前状态真源：各项目阶段、当前阻塞、谁等谁、下一步。
 > 单项目内部细节不在此展开，从「当前入口」链接回各项目 `docs/progress/INDEX.md`。
 > 跨项目需求池见 [REQUESTS.md](REQUESTS.md)（提报中心）。
-> 最近更新：**2026-07-27（xiaobao 三方全部答复 ai 转达的契约缺项，4 条阻塞 ai PRD 定稿的项全部闭合；契约连升 v1.2→v1.3、3 列 GRANT 双库执行；ai 侧 PRD 收敛至 R3 待三方复审，无阻塞定稿项）**。2026-07-25（**ai · PM 承接 REQ-003**，转入 ai v0.2 主线、PRD R1 待三方 Review；ai 侧提出 1 个 P0 契约冲突（`score_total` 归属）+ 6 项就绪度/资料确认（含 jsonb 结构样例、测试库造数），待 xiaobao 回应，见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)）。2026-07-12（REQ-003 R2 更新 + news-l1-db 契约 v1 出稿，待 ai 侧承接）。2026-07-04（REQ-001 news-l1 端到端联调完成，Owner 抽样验收通过，可进入关闭流程；KB 空结果语义待 ai 优化为已知遗留项，不阻塞）。2026-07-01（xiaobao 测试环境已部署 `/debug/ai`、`/v1/ai-debug/news-l1-runs`、`/v1/kb-search`；news-l1 主链路与 ai→xiaobao KB 命中用例已双向验证通过；KB 空结果语义待 ai 优化）。2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）
+> 最近更新：**2026-07-28（REQ-003 三件事全部闭合 + C-1~C-14 全闭：`domain_tags` 真源更正为 `sources.domain_tags`、C-6 单会话实证通过、测试队列修复、日增量确认 5~10 倍余量、KB 鉴权定方案 A；契约升 v1.5。ai 侧设计 R2 三方通过、CN-003~007 已落地，待定稿进实现阶段）**。2026-07-27（xiaobao 三方全部答复 ai 转达的契约缺项，4 条阻塞 ai PRD 定稿的项全部闭合；契约连升 v1.2→v1.3、3 列 GRANT 双库执行；ai 侧 PRD 收敛至 R3 待三方复审，无阻塞定稿项）**。2026-07-25（**ai · PM 承接 REQ-003**，转入 ai v0.2 主线、PRD R1 待三方 Review；ai 侧提出 1 个 P0 契约冲突（`score_total` 归属）+ 6 项就绪度/资料确认（含 jsonb 结构样例、测试库造数），待 xiaobao 回应，见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)）。2026-07-12（REQ-003 R2 更新 + news-l1-db 契约 v1 出稿，待 ai 侧承接）。2026-07-04（REQ-001 news-l1 端到端联调完成，Owner 抽样验收通过，可进入关闭流程；KB 空结果语义待 ai 优化为已知遗留项，不阻塞）。2026-07-01（xiaobao 测试环境已部署 `/debug/ai`、`/v1/ai-debug/news-l1-runs`、`/v1/kb-search`；news-l1 主链路与 ai→xiaobao KB 命中用例已双向验证通过；KB 空结果语义待 ai 优化）。2026-07-01（ai v0.1 实现阶段完成、`/v1/runs/news-l1` 就绪，向 xiaobao 提 news-l1 联调触发入口诉求，见 communications/REQ-001）。2026-06-30（xiaobao v0.6 已部署上线状态同步；REQ-001 KB search xiaobao 选定方案 b 实时接口）
 
 ## 各项目当前状态
 
@@ -57,7 +57,15 @@
   1. ~~口令交付~~ —— **已不是双方在途项**：ai worker 与 xiaobao 同机部署，ai DevOps 在部署阶段直接从服务器 `/root/.secrets/ai_worker_news_test.pw` 读入 ai 部署目录 `.env`，无需 Owner 转交、不经对话传递。xiaobao 侧无需跟进。
   2. **生产库 `news` 的 GRANT 尚未执行**（本次仅 `news_test`，角色 cluster 级已建）→ 登记为 **ai 上生产前置**，由 xiaobao DevOps 届时执行；ai 侧不假定生产已就绪。
   3. **造数队列会耗尽**（预置 5 条），耗尽后由 xiaobao 补跑 `seed_ai_queue_test.sql`；ai 侧联调前打招呼，不做「静默等待队列」误判。
-- **2026-07-28 ai 新提三件事（实机核出，均不阻塞 ai 设计与实现）**：
+- **✅ 2026-07-28 三件事全部闭合 + C-11~C-14 全闭（xiaobao 三方同日答复，ai 已回执）**：
+  1. **`domain_tags` 真源找到 —— xiaobao Architect 主动撤回其上轮对 C-1 的错误答复并认账**：真源是 **`sources.domain_tags`**（信息源级静态领域标签），**不是** `raw_items.l0_label`。GRANT 已执行、契约升 **v1.5** → **ai 与 HTTP 模式在该字段上完全等价**，一个「已知限制」直接消失。ai 侧据此撤回 CN-004 变更 1（CN-007）、重写设计 §3.3（CN-006）。`l0_label` 语义确认为「是否值得送 AI + 优先级 + 是否需补上下文」的处理决策标记，**ai 侧不再使用该列**。
+  2. **C-6 行锁实证通过（xiaobao DevOps 顺手实测）** → ai claim 采用写法 A。⚠️ **但双方均不得视作彻底关闭**——本次仅验证**单会话可行性**，**多 worker 并发不重复的验证仍在 ai 侧待做**；ai 侧 PRD「v0.3 多实例前必须先解决 C-6」前置**不解除**，完成后再回帖。
+  3. **测试队列已修复**：xiaobao DevOps 认领系其造数脚本缺陷（「正是 C-5 讨论过的形态，这次是我造出来的」），已补建 5 条 task + 订正脚本为幂等 → **ai 的 AC-10.2 真实数据冒烟阻塞解除**。
+  4. **日增量已答**：活跃期日均 **15~30 条**（757 条系 50+ 天累积），逐项排查无「上千条/天」场景 → 对照 ai 能力上界 340~920 条/天**有 5~10 倍余量**，**ai v0.3 并发化无需排期前移**（O-11 由 P1 降 P2）。xiaobao PM 承诺量级跃迁时**提前经本文档知会**。
+  5. **C-11/C-12/C-13 三条答复均与 ai 假设一致，ai 无需改实现**；且 xiaobao 应用层判重试上限**已改读 `tasks.max_attempts` 行内值**（两侧同源，`AI_MAX_RETRIES` 改动不再漂移）。
+  6. **KB 检索鉴权定案：方案 A（同机内网直连 + IP 白名单，无需 token）**。双方一致**不采纳**方案 B——唯一可用的是 xiaobao **全权 `ADMIN_TOKEN`**，下发即授予改源/删空间/同步规则等全部 admin 写权限，**违反最小权限**。**部署约束**：方案 A 唯一前提是**同机**；任一侧迁机则 KB 全失败且**主流程不中断只持续降级**，故 ai 已将「核对同机前提」写入部署就绪检查；迁机正解为 xiaobao 新增**独立只读 KB token**，ai 侧承诺迁机前提前提报。
+  > **`C-1 ~ C-14` 全部闭合**（ai 侧已闭合计数 18）；**仅剩 Q-1（`needs_context` 是否补列）待 xiaobao PM 表态**，不阻塞 ai 定稿与实现。
+- ~~2026-07-28 ai 新提三件事~~ —— 已全部闭合，见上。原文：
   1. **C-14** `l0_label` 完整取值域与语义——实测两库**只有 `direct_display` 一个非空取值**（test 154/154，生产 637 非空全同 + 120 NULL），**是流程标记非领域分类**，**推翻双方此前对 C-1 的闭合结论**。ai 已订正 PRD（`domain_tags` 在 DB 模式实际恒为 `[]`，CN-004）并用**排除集**处置——对方将来启用真实分类时 ai 无需改代码即自动生效。请确认取值域 + 是否另有列承载真实 L0 分类。
   2. **`tasks` 中 `l1_ai_process` 记录为 0** —— 2026-07-25 交付的 5 条预置 `raw_items` 没有对应 task 行，ai 按契约**只 claim tasks**（C-5 既定边界）故**永远领不到**。**阻塞 ai 的 AC-10.2 真实数据冒烟与 C-6 实证**。请修正 `seed_ai_queue_test.sql` 或补建 task 行。ai 侧按 C-5 结论**不做孤儿探测**，只新增空转可观测性（报告自己领不到活，不去查 `raw_items`）。
   3. **请提供 `process_type='ai'` 的日增量量级** —— ai v0.2 处理能力上界约 **340~920 条/天**（`N=1` + 单实例 + 批内串行，**无横向扩展余地**），生产已有 757 条历史而日增量双方从未确认。该数决定 **ai v0.3 并发化是否需排期前移**；若日增超过处理能力，队列将持续单调增长且**不报错**，REQ-003 只兑现一半动机。

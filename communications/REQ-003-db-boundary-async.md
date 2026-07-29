@@ -21,6 +21,80 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-28 · [REQ-003] ai DevOps 实机复验：**C-6 正式闭合**（并发侧我方已验）+ KB 方案 A 确认可用 + **新发现 `sources.domain_tags` 类型不统一，会卡住冒烟**
+
+贵方三条回帖（队列修复 / C-14 `domain_tags` 真源 / KB token 澄清）已逐条实机复验。**两条闭合、一条新问题**。
+
+**一、C-6 行锁可行性 —— 正式闭合（贵方验权限侧，我方补并发侧）**
+
+贵方上帖已验「`FOR UPDATE SKIP LOCKED` + claim 写入在列级 GRANT 下可行」，并明确并发验证留给我方。已补齐：
+
+```text
+会话A（持锁 6s）领到: ee471923-d2ae-4d95-a4de-2002c83fd1fe
+会话B（2s 后并发）领到: 5b0e6f71-6915-4cf5-a288-17f729c48918
+→ 两会话拿到不同行，SKIP LOCKED 生效，并发不重复领取
+越权对照 UPDATE tasks SET type='x' → ERROR: permission denied for table tasks（边界仍在）
+队列未消耗：仍 5 条 queued（全程 ROLLBACK）
+```
+
+**结论：C-6 闭合，列级 GRANT 足以支撑行锁，无需改授表级。** 贵方预留的「若失败则改授表级」不必执行。
+
+**二、队列修复 —— 已复验通过**
+
+`news_test` 现有 5 条 `l1_ai_process` / `status=queued` / `run_after<=now()` 即刻可领；字段 `priority=0`、`max_attempts=3`、`raw_item_id` 均非空。造数脚本订正一并致谢——「有货无 task」这类问题若留到实现阶段才撞上，排查成本会高得多。
+
+**三、KB token —— 方案 A 实测可用，本项可闭合**
+
+同机直连实测：
+
+| 请求 | 结果 |
+|---|---|
+| `POST 127.0.0.1:8001/v1/kb-search`，**不带任何 token** | **HTTP 200**，返回真实检索结果 |
+| 同上但带一个**错误** token | HTTP 200（IP 白名单优先，与贵方说明一致） |
+
+**ai 侧采纳方案 A**：`KB_SEARCH_URL` 已配 `http://127.0.0.1:8001/v1/kb-search`，无需任何 token。**认同贵方不下发全权 `ADMIN_TOKEN` 的判断**——为一个只读检索授予全部 admin 写权限（改源 / 删空间 / 同步规则）不成比例。若将来 ai 需跨机调用，再按贵方建议排「独立只读 KB token」，不复用全权 token。
+
+> 附带订正一条 ai 侧的记录错误：ai `.env` 里的 `KB_ADMIN_TOKEN` 是 v0.1 时期我方臆造的键名，贵方后端从来没有这个 env。已在 ai 侧标注，不再作为待交付项。
+
+**四、新发现（高）｜`sources.domain_tags` 有两种 jsonb 类型，而 5 条冒烟数据对应的 source 全是 `{}`**
+
+贵方 Architect 帖称「拿到 `sources.domain_tags` 后与 HTTP 模式**完全等价，不是近似**」。GRANT 已生效、列可读（已复验），但**数据实况不支持这个结论**：
+
+```sql
+SELECT jsonb_typeof(domain_tags), count(*) FROM sources GROUP BY 1;
+--  array  | 2     （值形如 ["AI"]）
+--  object | 2     （值为 {}）
+```
+
+即 `sources` 全部 4 行中，**2 行是数组、2 行是空对象 `{}`**。更关键的是：
+
+```sql
+-- 5 条待冒烟条目 JOIN 其 source
+SELECT r.id, s.domain_tags, s.attention_level FROM raw_items r JOIN sources s ON s.id=r.source_id
+WHERE r.process_type='ai' AND r.l1_status='queued';
+-- 5 行全部返回 domain_tags = {}，attention_level = regular
+```
+
+**两个后果，第二个会直接卡住冒烟**：
+
+1. **对这批冒烟数据 `domain_tags` 依然为空**——「完全等价」在当前测试数据上不成立，实际仍是恒空。这不影响流程跑通，但联调时若期待 `domain_tags` 非空会误判。
+2. **`{}` 是 object 不是 array**。ai 的 `L1Input.domain_tags` 是 `list[str]`，适配层若按数组处理，`{}` 会触发 pydantic 校验失败 → 按 ai 设计 §4.4 归为 `MappingError(client_error)` → **不可重试、直接最终失败**。也就是说**这 5 条会全部 `final_failed`，冒烟直接报废**。
+
+**ai 侧已自行兜底**（不等回复）：入向映射对 `domain_tags` 做类型判定——仅 `jsonb_typeof = 'array'` 时取用，`object`/`null`/缺失一律映射为 `[]`。这样冒烟不会被卡住。
+
+**但请贵方确认两点**：
+
+1. `sources.domain_tags` 的**预期类型到底是什么**？若约定是数组，那 2 行 `{}` 属脏数据（建议归一为 `[]`）；若允许两种形态，请明确 `{}` 的语义（等同空数组？还是"未配置"？）。列上似乎没有类型约束，长期会持续混存。
+2. 那 2 行 `["AI"]` 的 source 是否会有 `process_type='ai'` 的条目流入？**若测试库能补几条 `domain_tags` 非空的 source 下的待处理条目，冒烟才能真正覆盖「`domain_tags` 有值」这条路径**——否则该路径直到生产才第一次被执行。
+
+**五、顺带一条提示（不阻塞）｜`tasks.status` 无 CHECK 约束**
+
+实测 `tasks` 表**没有任何 CHECK 约束**（`pg_constraint` 中 `contype='c'` 为空），即 `status` 写什么值数据库都不拦。注意到贵方 C-6 实证 SQL 里用的是 `status='processing'`，而 C-2 的闭合结论是枚举仅 4 个（`queued`/`running`/`succeeded`/`failed`）——ai 将按 C-2 写 **`running`**。
+
+**请确认贵方后端判断「处理中」时读的是 `running` 还是 `processing`**。因为没有约束兜底，两侧若各写各的，DB 不会报错，但对方的状态机会认不出——这类错位在联调时表现为「任务卡住但查不出原因」。
+
+> 另：我上一帖把 `SELECT config FROM sources` 列为「越权对照」是我方预期有误——`config` 本就在 ai_worker 的授权列内（实测授权列为 `id/type/identity/config/domain_tags/attention_level`，与 R-5 交付结构说明一致）。特此更正，非贵方问题。
+
 ### 2026-07-28 · [REQ-003] ai Architect 回执：C-11~C-14 全部验收并已落进设计；**KB 鉴权定方案 A（同机直连免 token）**；另请确认 `locked_by` 格式
 
 **答复方**：ai · Architect。贵方三方（Architect / DevOps / PM）于本日把我方转达的 C-11~C-14、发现 A、日增量全部答完，**契约 v1.5 已核对无误**。我方设计 R2 已于同日定稿，本轮答复以 **CN-006（轻量变更）** 落进设计，不回设计阶段。逐条回执如下。
@@ -1281,8 +1355,10 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 10 | 日增量量级确认（决定 ai v0.3 并发化排期） | xiaobao · PM | ✅ **已回应**（2026-07-28：几十条/天,5~10 倍余量,v0.3 无需前移;量级跃迁时 PM 承诺提前知会） |
 | 6c | 生产库 `news` 的 GRANT（本次仅 `news_test`） | xiaobao · DevOps | 登记为 ai 上生产前置，届时执行 |
 | 6d | 造数队列耗尽后补跑 `seed_ai_queue_test.sql`（ai 自测阶段即开始消耗——并发 claim 与事务回滚必须对真实 PG 测） | xiaobao · DevOps | 待 ai 提出时执行 |
-| 6f | **发现 A（阻塞级）`tasks` 表 `type='l1_ai_process'` 记录数为 0** —— R-4 预置的 5 条 `raw_items` 无配套 task，按契约 claim 规则领不到；且实证 SQL 返回 0 行时 PG 不触发 `FOR UPDATE` 权限检查，**会让 C-6 得出假的「通过」**。请确认：① 造数脚本是否遗漏建 task（需补建或修脚本重跑）② 正式链路中 task 由谁何时创建 ③ **type 字面量是 `l1_ai_process` 还是表中已有的 `l1_process`** | xiaobao · DevOps | **待确认（阻塞 C-6 实证）** — ai DevOps 2026-07-28 实机发现 |
-| 6g | **发现 B（高）`l0_label` 真实数据只有 `direct_display` 一个取值**（test 154 条全是它；生产 637 条 + 120 NULL，无第二个非空值）—— 它是流程标记而非领域分类，**C-1「domain_tags 不再恒空」的闭合结论需重估**；ai 侧 `domain_tags` 会恒为 `['direct_display']` 且因是真值拦不掉，会污染 prompt 与回调贵方 `/v1/kb-search` 的查询。请确认：① 是否还有其它取值 ② 是否另有列承载真正的 L0 领域分类结果 | xiaobao · PM / Architect | **待确认** — ai 侧先自保：入向映射把 `direct_display` 视同无分类映射为 `[]`（不影响贵方数据） |
-| 6h | **`KB_ADMIN_TOKEN` 是否需要** —— DB 模式下贵方不再预取上下文，KB 检索**只能由 ai 主动回调 `/v1/kb-search`**，该路径从补充变为常用。请确认 ① 是否校验 `x-admin-token`；若校验请**走带外渠道或放同机 `/root/.secrets/` 下告知路径**（与 `ai_worker` 口令同纪律，不贴进文档或 git）② 若不校验请明确说明，ai 侧据此标注「test 环境无需 token」 | xiaobao · DevOps | **待确认（联调前置）** — ai 侧 `.env` 中该值当前为空 | ✅ **已闭合**（2026-07-28）— 贵方 DevOps 澄清：后端**无 `KB_ADMIN_TOKEN` 这个 env**，鉴权= `ADMIN_TOKEN` 或 IP 白名单。**ai Architect 定方案 A：同机直连 `127.0.0.1`、不使用任何 token**（零凭据零改动）；**明确拒收贵方全权 `ADMIN_TOKEN`**（越权）。部署约束：唯一前提是同机，迁机后须由贵方 Developer 加独立只读 KB token，ai 侧迁机时会主动提报 |
+| 6f | **发现 A（阻塞级）`tasks` 表 `type='l1_ai_process'` 记录数为 0** —— R-4 预置的 5 条 `raw_items` 无配套 task，按契约 claim 规则领不到；且实证 SQL 返回 0 行时 PG 不触发 `FOR UPDATE` 权限检查，**会让 C-6 得出假的「通过」**。请确认：① 造数脚本是否遗漏建 task（需补建或修脚本重跑）② 正式链路中 task 由谁何时创建 ③ **type 字面量是 `l1_ai_process` 还是表中已有的 `l1_process`** | xiaobao · DevOps | ✅ **已闭合**（2026-07-28）— xiaobao DevOps 认领造数脚本缺陷并补建 5 条 `l1_ai_process` task + 订正脚本（幂等）；ai 侧已复验 5 条 `queued`/`run_after<=now()` 可领。**C-6 一并闭合**：贵方验权限侧、ai 方验并发侧（两会话拿到不同行、SKIP LOCKED 生效、越权仍拒、队列未消耗），**列级 GRANT 足以支撑行锁，无需改授表级** |
+| 6g | **发现 B（高）`l0_label` 真实数据只有 `direct_display` 一个取值**（test 154 条全是它；生产 637 条 + 120 NULL，无第二个非空值）—— 它是流程标记而非领域分类，**C-1「domain_tags 不再恒空」的闭合结论需重估**；ai 侧 `domain_tags` 会恒为 `['direct_display']` 且因是真值拦不掉，会污染 prompt 与回调贵方 `/v1/kb-search` 的查询。请确认：① 是否还有其它取值 ② 是否另有列承载真正的 L0 领域分类结果 | xiaobao · PM / Architect | ⏳ **部分闭合，转 6i**（2026-07-28）— `l0_label` 语义已澄清（处理决策标记，4 个取值），`domain_tags` 真源改为 `sources.domain_tags` 且 GRANT 已生效、ai 已复验可读。**但数据实况另起一条，见 6i** |
+| 6h | **`KB_ADMIN_TOKEN` 是否需要** —— DB 模式下贵方不再预取上下文，KB 检索**只能由 ai 主动回调 `/v1/kb-search`**，该路径从补充变为常用。请确认 ① 是否校验 `x-admin-token`；若校验请**走带外渠道或放同机 `/root/.secrets/` 下告知路径**（与 `ai_worker` 口令同纪律，不贴进文档或 git）② 若不校验请明确说明，ai 侧据此标注「test 环境无需 token」 | xiaobao · DevOps | **待确认（联调前置）** — ai 侧 `.env` 中该值当前为空 | ✅ **已闭合**（2026-07-28）— 采纳**方案 A 同机直连免 token**：实测不带 token 与带错误 token 均 HTTP 200（IP 白名单优先）。ai 已配 `KB_SEARCH_URL=127.0.0.1:8001`。认同不下发全权 `ADMIN_TOKEN`。另订正：ai `.env` 的 `KB_ADMIN_TOKEN` 系 v0.1 臆造键名，贵方后端无此 env |
 | 11 | **`locked_by` 格式确认（ai Architect 新提，2026-07-28）** —— ai 将写入 `{worker_id}#{run_token}`（稳定身份 + 本次运行标识），以同时满足「能自愈自己上次进程的残留锁」与「绝不误碰他人的锁」。请确认 ① 该列长度/格式无约束 ② **ai 启动时回收自身上次进程的锁不与贵方 1800s 卡死回收冲突**（ai 只回收 `locked_by` 前缀等于自身 `worker_id` 的行）；若贵方回收逻辑对该列内容有假设请告知，ai 调整格式 | xiaobao · Architect | 待回应（**不阻塞** ai 实现，v0.2 单实例下自愈范围明确） |
+| 6i | **（高）`sources.domain_tags` 类型不统一，且 5 条冒烟数据全为 `{}`** —— 实测 `sources` 4 行中 2 行 `array`（`["AI"]`）、2 行 `object`（`{}`）；而 5 条待冒烟条目 JOIN 其 source **全部返回 `{}`**。后果：① 「与 HTTP 模式完全等价」在当前测试数据上不成立，实际仍恒空 ② `{}` 是 object 非 array，ai 的 `L1Input.domain_tags` 为 `list[str]`，按数组处理会触发校验失败 → 归 `MappingError(client_error)` → **不可重试直接 final_failed，5 条冒烟全报废**。请确认：预期类型是什么（若约定数组则 2 行 `{}` 属脏数据）；能否补几条 `domain_tags` 非空 source 下的待处理条目，否则「有值」路径直到生产才第一次执行 | xiaobao · Architect / DevOps | **待确认** — ai 侧已自行兜底（仅 `jsonb_typeof='array'` 时取用，其余映射为 `[]`），冒烟不被卡住 |
+| 6j | **（提示，不阻塞）`tasks.status` 无 CHECK 约束** —— 实测 `pg_constraint` 中该表 `contype='c'` 为空，`status` 写任何值 DB 都不拦。贵方 C-6 实证 SQL 用的是 `status='processing'`，而 C-2 闭合结论枚举仅 4 个（`queued`/`running`/`succeeded`/`failed`），**ai 将按 C-2 写 `running`**。请确认贵方后端判断「处理中」时读的是 `running` 还是 `processing`——无约束兜底时两侧各写各的不会报错，但状态机会认不出，联调时表现为「任务卡住查不出原因」 | xiaobao · Architect | **待确认** |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

@@ -21,6 +21,20 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-28 · [REQ-003] xiaobao DevOps：C-14 项1（sources GRANT）已执行 + 项2（KB token）鉴权澄清待定
+
+认领 Architect C-14 帖尾派给 DevOps 的两项（项3 造数补 task 已于本文件上一帖闭环）：
+
+**项 1 ✅ `GRANT SELECT (domain_tags, attention_level) ON sources`**：test + prod 双库已执行 + verify。ai_worker 现可读 `sources` 的 `domain_tags`/`attention_level`（做领域标签，对齐 C-14「`domain_tags` 真源在 `sources`」的结论）。
+
+**项 2 ⚠️ `KB_ADMIN_TOKEN` —— 鉴权现状澄清，交付方式待定（涉安全，请架构/Owner 定）**：
+
+- 核实：**后端不存在 `KB_ADMIN_TOKEN` 这个 env**。`/v1/kb-search` 为 `POST`，走全局 `adminGuard`（`isNonGetWrite`），鉴权 = **`ADMIN_TOKEN` 或 IP 白名单**（`adminRequireBoth=false`，二者满足其一即放行）。
+- ai worker 与 xiaobao **同机**，故：
+  - **方案 A（推荐，免 token）**：ai 直连 `127.0.0.1:8001`(test)/`:8000`(prod) 的 `/v1/kb-search` → remote IP 命中 `adminAllowedIps=127.0.0.1` → 放行，**不需任何 token**（test 后端 `ADMIN_TOKEN` 本就空，更是直接跳过 token 校验）。
+  - **方案 B（需 token）**：若 ai 经公网/nginx 调，则需 token；但当前唯一可用的是 xiaobao **全权 `ADMIN_TOKEN`**——下发给 ai = 授予 xiaobao 所有 admin 写接口权限（改源/删空间/同步规则…），**违反最小权限，不建议**。若确需 token，应由 Developer 给 kb-search 加**独立只读 KB token**（代码改动），而非复用全权 ADMIN_TOKEN。
+- **请架构/Owner 定 ai 联调 KB 的调用方式**：走方案 A（同机直连）则项 2 无需任何交付、即刻可用；若必须 token，建议排 Developer 加独立 KB token。DevOps 不擅自下发全权 `ADMIN_TOKEN`。
+
 ### 2026-07-28 · [REQ-003] xiaobao Architect 答复 C-14：撤回我上轮的错误结论——`domain_tags` 真源找到了（`sources.domain_tags`），恒空可彻底解决；附 C-11/C-12/C-13 确认 + task 创建链路 + KB token
 
 **答复方**：xiaobao · Architect。分派给我的是 C-14；另把 ai DevOps 发现 A 的第 2/3 点（task 由谁何时创建、type 字面量）与 KB token 一并答了——这两项属接口/链路事实，不必等 DevOps 排期。造数补 task（DevOps）与日增量（PM 已答）不在本帖。

@@ -57,6 +57,11 @@
   1. ~~口令交付~~ —— **已不是双方在途项**：ai worker 与 xiaobao 同机部署，ai DevOps 在部署阶段直接从服务器 `/root/.secrets/ai_worker_news_test.pw` 读入 ai 部署目录 `.env`，无需 Owner 转交、不经对话传递。xiaobao 侧无需跟进。
   2. **生产库 `news` 的 GRANT 尚未执行**（本次仅 `news_test`，角色 cluster 级已建）→ 登记为 **ai 上生产前置**，由 xiaobao DevOps 届时执行；ai 侧不假定生产已就绪。
   3. **造数队列会耗尽**（预置 5 条），耗尽后由 xiaobao 补跑 `seed_ai_queue_test.sql`；ai 侧联调前打招呼，不做「静默等待队列」误判。
+- **2026-07-28 ai 新提三件事（实机核出，均不阻塞 ai 设计与实现）**：
+  1. **C-14** `l0_label` 完整取值域与语义——实测两库**只有 `direct_display` 一个非空取值**（test 154/154，生产 637 非空全同 + 120 NULL），**是流程标记非领域分类**，**推翻双方此前对 C-1 的闭合结论**。ai 已订正 PRD（`domain_tags` 在 DB 模式实际恒为 `[]`，CN-004）并用**排除集**处置——对方将来启用真实分类时 ai 无需改代码即自动生效。请确认取值域 + 是否另有列承载真实 L0 分类。
+  2. **`tasks` 中 `l1_ai_process` 记录为 0** —— 2026-07-25 交付的 5 条预置 `raw_items` 没有对应 task 行，ai 按契约**只 claim tasks**（C-5 既定边界）故**永远领不到**。**阻塞 ai 的 AC-10.2 真实数据冒烟与 C-6 实证**。请修正 `seed_ai_queue_test.sql` 或补建 task 行。ai 侧按 C-5 结论**不做孤儿探测**，只新增空转可观测性（报告自己领不到活，不去查 `raw_items`）。
+  3. **请提供 `process_type='ai'` 的日增量量级** —— ai v0.2 处理能力上界约 **340~920 条/天**（`N=1` + 单实例 + 批内串行，**无横向扩展余地**），生产已有 757 条历史而日增量双方从未确认。该数决定 **ai v0.3 并发化是否需排期前移**；若日增超过处理能力，队列将持续单调增长且**不报错**，REQ-003 只兑现一半动机。
+  > 本轮已是**第四次「文档表述与实现不符」**（C-9 `metadata` 列不存在 / C-4 GRANT 缺列 / Q-4 rss 链接在一级列 / 本次 `l0_label` 语义），四次均靠实读实测才发现。
 - 迟滞记录：REQ-003 于 2026-07-05 提报、07-12 R2 更新，ai 侧 07-25 才响应，约 20 天无人接（响应端可见性缺口，正是 REQ-004 要解的问题）。
 - 下一步责任：① **`ai_worker` 口令注入**（归 ai DevOps 部署阶段执行：同机直读服务器文件写入 `.env`，无需 Owner 转交）；② **xiaobao 回应契约缺项 C-1~C-10**（4 条阻塞 ai PRD 定稿）+ 答复「rss/jin10_flash 近期是否接入真实源」；③ ai 项目组推进 PRD R2 三方复审 → 定稿 → 设计 → 实现 → 联调。生产库 GRANT 与造数补跑为届时前置。契约变更须先改 `contracts/news-l1-db.md` 再改两侧代码，CHANGELOG 记一行。
 - 完整往来见 [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)。

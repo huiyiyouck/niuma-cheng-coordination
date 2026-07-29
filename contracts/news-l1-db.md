@@ -1,7 +1,7 @@
 # 契约：news-l1-db（新闻 L1 数据库边界契约）
 
 - 契约 id：`news-l1-db`
-- 版本：v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
+- 版本：v1.5（2026-07-28 Architect 答复 C-11~C-14：**撤回 v1.3 关于 `l0_label` 的错误结论**——`L1Input.domain_tags` 真源是 `sources.domain_tags`（源级静态标签，非 L0 产物），`l0_label` 是处理决策标记，两者语义无关；补 `l0_label` 完整取值域枚举；§sources 补 `domain_tags`/`attention_level` 行（权限待 GRANT）；明确 `priority` 方向为「数值大 = 优先」；退避越界取末值 + `max_attempts` 以列为准并登记 xiaobao 侧待订正的硬编码；标注 `source_item_url` 不保证协议前缀；登记 `processed_news.raw_item_id` 唯一约束为 ai 幂等前提。见 C-11/C-12/C-13/C-14）。v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
 - 状态：生效中（ai 已承接 REQ-003，2026-07-25）
 - schema 权属方：`xiaobao`（拥有建表改表、角色管理、触发器创建权限）
 - worker 方：`ai`（AI 处理中枢 / Agent Hub）
@@ -40,8 +40,8 @@
 | `l1_status` | varchar | L1 状态（见下方枚举） |
 | `l1_attempt` | int | L1 处理尝试次数 |
 | `process_type` | varchar(20) | 处理类型：`direct` / `ai` |
-| `source_item_url` | text | 原文链接（rss/x 类 link_read 输入；v1.4 随 GRANT 补入） |
-| `l0_label` | varchar | L0 分类结果（进 prompt 与 KB 检索，消除 domain_tags 恒空；v1.4 随 GRANT 补入） |
+| `source_item_url` | text | 原文链接（link_read 输入；v1.4 随 GRANT 补入）。**不保证带 `http(s)://` 协议前缀**——`x_twitter` 两条入库路径均构造完整 URL 故保证，`rss`（取自 feed 的 `link`）与 `jin10_flash`（取自 MCP 的 `url`）**原样透传源数据、不保证**。ai 侧自行规范化，无法规范化按「无 URL」处理（v1.5，见 C-13） |
+| `l0_label` | varchar(50) | **L0 处理决策标记，不是领域分类**（v1.5 订正，见 C-14）。取值域见下方枚举。**不要用作 `domain_tags`**——后者真源见 §sources |
 
 `ai_worker` 可**写**的列：
 
@@ -51,6 +51,23 @@
 | `l1_error` | text | 失败原因（失败时写入） |
 | `l1_processed_at` | timestamptz | 处理完成时间 |
 | `l1_attempt` | int | 递增尝试次数 |
+
+#### l0_label 取值域（v1.5 新增，见 C-14）
+
+**语义：L0 阶段的处理决策标记（是否值得送 AI + 优先级 + 是否需补上下文），非领域分类。**
+
+| 取值 | 含义 | 写入时机 |
+|------|------|---------|
+| `direct_display` | 直显类，不走 AI 链路 | xiaobao `processor.ts` 处理直显条目时 |
+| `normal_candidate` | L0 通过：正常信息，送 AI 分析 | L0 LLM 判定通过 |
+| `high_priority_candidate` | L0 通过：重大事件 / 突发 / 官方公告 | 同上 |
+| `needs_context_candidate` | L0 通过：需补背景（含链接 / 代号 / 缩写） | 同上 |
+| `empty_text` / `duplicate_content_hash` / `emoji_only` / `retweet_no_added_text` / `spam:{pattern}` | L0 规则引擎跳过原因 | 规则命中 |
+| `llm_skip` 或 LLM 返回的 `skipReason` | L0 LLM 判定跳过 | LLM 判 skip |
+| `NULL` | 尚未进入 L0 | — |
+
+> **现状提示**：截至 2026-07-28，两库实测该列非空值只有 `direct_display` 一个——因为 L0 链路尚未成功跑通（`news_test` 8 条 `l0_classify` 全 `failed`）且生产 AI 开关默认关闭。上表是代码中已实现的完整取值域，不是规划。
+> `*_candidate` 三值对 ai 侧可作为**处理优先级 / 是否需补上下文**的信号使用（与 `needs_context` 相关），但**不可作为领域标签**。
 
 #### l1_status 枚举
 
@@ -99,7 +116,7 @@ RETURNING *;
 | 字段 | 类型 | 说明 | 对应 AI 输出 |
 |------|------|------|-------------|
 | `id` | uuid | 新闻 id（PK，`DEFAULT gen_random_uuid()`）。**ai_worker 不显式写入**，由数据库生成（v1.3 明确，见 C-3） | — |
-| `raw_item_id` | uuid | 关联 raw_items.id，**`NOT NULL UNIQUE`**（幂等键，支撑 `ON CONFLICT (raw_item_id) DO UPDATE`） | — |
+| `raw_item_id` | uuid | 关联 raw_items.id，**`NOT NULL UNIQUE`**（幂等键，支撑 `ON CONFLICT (raw_item_id) DO UPDATE`）。**该唯一约束是 ai 写回幂等性的前提**——放宽它（例如为支持重跑允许多版本结果）会使 ai 的 `ON CONFLICT` 静默失效并产生重复行，因此**变更前必须先改本契约并通知 ai**（v1.5 登记，见 C-13） | — |
 | `published_at` | timestamptz | 发布时间，**列表排序依据**。ai_worker 写回时请一并写入（取 `raw_items.published_at`）——占位行当前该列为 NULL，缺此写入会导致条目在列表中沉底（v1.3 追加，见沟通文档三-2） | —（取自 raw_items） |
 | `title` | text | 中文标题 | title |
 | `summary` | text | 摘要 | summary |
@@ -124,6 +141,10 @@ RETURNING *;
 | `type` | varchar | 源类型（x_twitter / rss / ...） |
 | `identity` | varchar | 源标识 |
 | `config` | jsonb | 源配置 |
+| `domain_tags` | jsonb | **`L1Input.domain_tags` 的真源**（v1.5 新增，见 C-14）。信息源级静态领域标签，与 HTTP 模式**同字段同数据**：`sources.domain_tags` → `l1-processor.ts:243/257-278` → `ai-hub.ts:45` → HTTP 请求体。ai 侧经 `raw_items.source_id → sources.id` 主键 join 取值即与 HTTP 模式等价。**权限待 GRANT 执行后生效** |
+| `attention_level` | varchar(20) | 源关注级别（`regular` 等）。HTTP 模式的 L0 输入亦使用；ai 侧按需取用（v1.5 新增，权限待 GRANT） |
+
+> **v1.5 重要订正（C-14）**：v1.3 曾答复「L0 分类结果存在 `raw_items.l0_label`，GRANT 该列即可消除 `domain_tags` 恒空」——**该结论错误并已撤回**。`L1Input.domain_tags` 从来不是 L0 的产物，而是本表的源级静态标签；`l0_label` 是处理决策标记（见 §raw_items）。两列语义无关。
 
 ### tasks（任务表，用于 claim 与退避重试）
 
@@ -137,7 +158,7 @@ RETURNING *;
 | `status` | varchar | 任务状态（枚举见下） | 可更新 |
 | `run_after` | timestamptz NOT NULL | **退避时间，claim 过滤依据** | 可更新（GRANT 已就绪，v1.4） |
 | `max_attempts` | int NOT NULL | 该 task 的尝试上限（建任务时按 `AI_MAX_RETRIES` 写入） | 只读 |
-| `priority` | int NOT NULL | 优先级（默认 0） | 只读 |
+| `priority` | int NOT NULL | 优先级（默认 0）。**方向：数值大 = 优先**（v1.5 明确，见 C-11）——xiaobao `claimTask` 为 `ORDER BY priority DESC, created_at ASC`。ai 侧 claim 须按 `priority DESC` 排序，否则优先级设置不生效且不报错 | 只读 |
 | `locked_by` | text | 锁定者（worker 标识） | 可更新 |
 | `locked_at` | timestamptz | 锁定时间 | 可更新 |
 | `attempt` | int | 已尝试次数（claim 时 +1，**重试上限判定真源**） | 可更新 |
@@ -172,7 +193,12 @@ RETURNING *;
 
 | type | 用途 | 最大尝试次数 | 退避间隔 |
 |------|------|-------------|----------|
-| `l1_ai_process` | AI 处理任务 | `tasks.max_attempts`（默认 3，由 `AI_MAX_RETRIES` 配置） | [60s, 300s, 900s]，写入 `run_after` |
+| `l1_ai_process` | AI 处理任务 | **以 `tasks.max_attempts` 列为准**（建任务时按 `AI_MAX_RETRIES` 写入，默认 3） | [60s, 300s, 900s]，写入 `run_after`；**`attempt` 超出数组长度时取末值 900s**，不得取 0 或崩溃 |
+
+> **v1.5 订正（C-12）**：
+> - 「最大尝试次数 3」的旧表述已改为**以 `tasks.max_attempts` 列为准**——`schema.ts` 该列默认值为 5，v0.6 时代的既有 `l1_process` 行即为 5；新建的 `l1_ai_process` 行按 `AI_MAX_RETRIES`（默认 3）写入。ai 侧读列，勿硬编码。
+> - **退避越界行为**：xiaobao 实现为 `backoff[Math.min(tries, backoff.length - 1)]`（`dispatcher.ts:118-119`），即超出取末值，与 ai 侧假设一致。
+> - **已知不一致（xiaobao 侧待订正）**：xiaobao 应用层判上限当前读的是硬编码常量表 `BACKOFF_CONFIG[type].maxAttempts`（`l1_ai_process` = 3），**不读 `tasks.max_attempts` 列**。默认配置下两者同为 3 不冲突；若 `AI_MAX_RETRIES` 改为非 3 则两侧漂移。xiaobao 已登记订正为读列。
 
 ## 数据库角色与权限
 

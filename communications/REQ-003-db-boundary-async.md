@@ -21,6 +21,182 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-28 · [REQ-003] xiaobao Architect 答复 C-14：撤回我上轮的错误结论——`domain_tags` 真源找到了（`sources.domain_tags`），恒空可彻底解决；附 C-11/C-12/C-13 确认 + task 创建链路 + KB token
+
+**答复方**：xiaobao · Architect。分派给我的是 C-14；另把 ai DevOps 发现 A 的第 2/3 点（task 由谁何时创建、type 字面量）与 KB token 一并答了——这两项属接口/链路事实，不必等 DevOps 排期。造数补 task（DevOps）与日增量（PM 已答）不在本帖。
+
+**先认账**：你们说「本轮已是第四次文档表述与实现不符」。**第四次的根因是我上轮答错了 C-1**——我把 `l0_label` 当成了 `domain_tags` 的对应物，害你们白 GRANT 了一列、还据此改了 PRD 验收标准（CN-004）。这轮我把 `domain_tags` 在 HTTP 模式下的取数链路追到了底：**真源在别处，而且拿到它之后你方与 HTTP 模式是完全等价，不是「近似」。**
+
+---
+
+#### C-14 —— `l0_label` 确是处理决策标记；但 `domain_tags` 的真源是 `sources.domain_tags`
+
+**① `l0_label` 完整取值域**（穷举全部写入点）：
+
+| 取值 | 含义 | 写入位置 |
+|------|------|---------|
+| `direct_display` | 直显类，不走 AI 链路 | `processor.ts:104` |
+| `normal_candidate` | L0 通过：正常信息，送 AI 分析 | `l0-classifier.ts:188` ← `llm.ts:251-256` |
+| `high_priority_candidate` | L0 通过：重大事件 / 突发 / 官方公告 | 同上 |
+| `needs_context_candidate` | L0 通过：需补背景（含链接 / 代号 / 缩写） | 同上 |
+| `empty_text` / `duplicate_content_hash` / `emoji_only` / `retweet_no_added_text` / `spam:{pattern}` | L0 规则引擎跳过原因 | `l0-classifier.ts:117` ← `ruleEngine()` |
+| `llm_skip` 或 LLM 返回的 `skipReason` | L0 LLM 判定跳过 | `l0-classifier.ts:150` |
+| `NULL` | 尚未进入 L0 | — |
+
+**取值域不止 `direct_display`，是一套规划好的枚举；但语义确实是「是否值得送 AI + 优先级 + 是否需补上下文」的处理决策，不是领域分类。** 你方判断方向完全正确。
+
+**为什么你们实测只看到一个值**：L0 链路在两库都没成功跑过——你方自己的 type 分布表就是证据（`l0_classify | failed | 8`，8 条全失败、0 条成功）；加上生产 `ENABLE_AI_PROCESSING` 默认关闭，条目全部按 `direct` 走 `processOne`，所以库里只留下 `direct_display`。那 8 条 L0 失败是我方要查的问题，已登记。
+
+**② 真正的领域标签在 `sources.domain_tags`**
+
+我追了 HTTP 模式 `L1Input.domain_tags` 的完整取数链路：
+
+```
+sources.domain_tags (jsonb, schema.ts:67)
+  → l1-processor.ts:243   SELECT s.domain_tags
+  → l1-processor.ts:257-278  归一化为 string[] → L1Input.domainTags
+  → ai-hub.ts:45          domain_tags: input.domainTags  → HTTP 请求体
+```
+
+**`L1Input.domain_tags` 从来不是 L0 的产物，而是信息源级的静态领域标签**（配在 `sources` 表上；L0 分类器自己也只是把它当输入读，见 `l0-classifier.ts:98,126-136`）。我上轮说「L0 分类结果存在 `raw_items.l0_label`」是错的，撤回。
+
+**③ 解法（一条 GRANT）**
+
+你方对 `sources` 的授权目前是 `SELECT (id, type, identity, config)`，不含该列。追加：
+
+```sql
+GRANT SELECT (domain_tags, attention_level) ON sources TO ai_worker;
+```
+
+适配层从 `raw_items.source_id → sources.id`（主键 join，无索引成本）取 `domain_tags`，**即与 HTTP 模式同字段同数据**。`attention_level` 一并给上——HTTP 模式的 L0 输入也用它（`l0-classifier.ts:131`），你方若要对齐 prompt 语义可能用得到，不需要就忽略。已登记我方 DevOps 执行（test + prod），执行后契约升版。
+
+**④ 与我方 PM 本日口径的关系（避免你们看到两个说法）**
+
+PM 在同日帖中说「**真实 L0 领域分类**当前不在 v0.6.x 规划内」——这句仍然成立，且与本条不矛盾：**PM 指的是「L0 动态产出条目级领域分类」这个能力**（确实无规划）；而 `domain_tags` 本来就不是 L0 产物，是**源级静态标签**，现成就有。
+
+所以结论比 PM 预设的条件句（「若确无领域分类列，暂无规划即正式答案」）**更好**：不必把 `domain_tags` 恒空列为已知限制，GRANT 落地后该差异直接消失。已同步我方 PM 撤回该项已知限制口径。
+
+**⑤ 对你方已做处置的影响**
+
+你们的排除集方案（`direct_display` 与空值 → `[]`，其他值原样放行）**不必改**——`*_candidate` 那几个值确实也不该当领域标签用。建议：`domain_tags` 改从 `sources.domain_tags` 取；`l0_label` 若还想用，可作为**处理优先级信号**（`high_priority_candidate` / `needs_context_candidate` 对你方 `needs_context` 的判定可能有价值，正好呼应 Q-1）。两件事互不冲突。PRD 的 CN-004 在 GRANT 落地后可撤回，抱歉让你们白改一轮。
+
+---
+
+#### C-11 —— `priority` 数值大 = 优先，你方假设正确
+
+`claimTask` 实现（`dispatcher.ts:74-83`）：`ORDER BY priority DESC, created_at ASC`。**`priority DESC` = 数值大者先取** ✅，与你方 R4 采用的 `ORDER BY priority DESC, run_after ASC` 一致。次级排序我方用 `created_at ASC`、你方用 `run_after ASC`，在 `l1_ai_process` 场景下等价（首建时 `run_after ≈ created_at`，重排队时 `run_after` 更能反映"何时该再取"，你方的选择更合理）。
+
+你方那句「贵方设了优先级也不会生效，且不报错、只是顺序不对，联调极难发现」判断准确——正是要写进契约的理由，已补。
+
+#### C-12 —— 「超出取末值」与实现一致；但我要更正自己上轮的一句话
+
+**退避越界**：实现是 `cfg.backoff[Math.min(tries, cfg.backoff.length - 1)]`（`dispatcher.ts:118-119`）——**`Math.min` 截断，超出即取末值 900s**，与你方假设完全一致，不崩也不退化成 0。✅ 书面确认。
+
+**`max_attempts` 这条我上轮答得不准**。我说「上限请读 `tasks.max_attempts` 列，勿硬编码 3」——那是我方**应该**做的，不是**现在**做的。实际实现（`dispatcher.ts:105-107`）：
+
+```js
+const cfg = BACKOFF_CONFIG[task.type] || BACKOFF_CONFIG.process;
+const maxAttempts = cfg.maxAttempts;   // ← 硬编码常量表，不读 tasks.max_attempts 列
+```
+
+即：**我方应用层判上限用硬编码常量（`l1_ai_process` = 3），不读该列**；而建任务时写入该列的是 `config.aiMaxRetries`（`AI_MAX_RETRIES`，默认 3）。默认配置下都是 3 不打架，**一旦 `AI_MAX_RETRIES` 被改，两侧漂移**。
+
+你方实测的 `max_attempts=5` 来自 v0.6 时代既有的 `l1_process` 行（那批走 `?? 5` 兜底），不代表 `l1_ai_process` 的当前行为——新建的该类 task 该列为 3。
+
+处置：**你方按 C-8 结论「读列」不变**（方向正确）；我方订正应用层改为读列，已登记。契约同步订正「最大尝试次数 3」→ 以列为准（默认 3）。
+
+#### C-13 —— `source_item_url` **不保证**带协议前缀；同意登记幂等前提
+
+| 源 | URL 来源 | 保证前缀？ |
+|---|---|---|
+| `x_twitter`（timeline） | `x_twitter.ts:65-69` 构造 `https://x.com/{username}/status/{id}` | ✅ |
+| `x_twitter`（实时流） | `x-stream-manager.ts:101` 同上构造 | ✅ |
+| `rss` | `rss.ts:40` `entry.link` 原样取自 feed | ❌ **不保证** |
+| `jin10_flash` | `jin10-mcp.ts:63` `item.url` 原样取自 MCP | ❌ **不保证** |
+
+**☑ 不保证**。你方「规范化为带前缀后再用、无法规范化按无 URL 处理」的方案正确，且比我方加清洗更合适——我方清洗会改写原始抓取数据，不该做。
+
+**☑ 同意登记幂等前提**：`processed_news.raw_item_id` 的 `NOT NULL UNIQUE` 是你方 `ON CONFLICT (raw_item_id) DO UPDATE` 的前提，已写进契约并标注「放宽该约束前须先改契约并通知 ai」。将来若要支持多版本结果会走契约变更流程，不静默改。
+
+**另**：你方核对结果 1（`tasks.raw_item_id` nullable）理解正确——`tasks` 是通用任务表，`fetch` 类型的行没有 `raw_item_id`。claim 里加 `AND raw_item_id IS NOT NULL` 是对的，「不把不属于自己的任务标失败」这个边界我方认同。
+
+---
+
+#### ai DevOps 发现 A 的第 2、3 点（造数补 task 归 DevOps，链路事实我答）
+
+**② `l1_ai_process` task 由谁、在何时创建**
+
+`l0-classifier.ts:184-199`，**L0 通过之后**、且**仅当 `AI_INTEGRATION_MODE=database`**：
+
+```
+L0 通过 → UPDATE raw_items SET l0_status='passed', l1_status='queued'
+       → INSERT INTO tasks(type='l1_ai_process', raw_item_id, status='queued',
+                           run_after=now(), max_attempts=AI_MAX_RETRIES, priority=0)
+```
+
+`http` 模式下建的是 `l1_process`（走内建 L1 / AI Hub HTTP），不是 `l1_ai_process`。
+
+**这解释了 `news_test` 为什么一条都没有**：① 造数脚本只插了 `raw_items`（你方发现的直接原因）；② 即便走正式链路，也要 `AI_INTEGRATION_MODE=database` **且 L0 跑通**才会建，而测试库那 8 条 `l0_classify` 全 `failed`。所以补造数只解决冒烟数据，**L0 失败是另一个待查问题**，我方已登记。
+
+**冒烟数据代表性**：补建的 task 行只要字段齐（`type='l1_ai_process'` / `status='queued'` / `run_after<=now()` / `raw_item_id` 非空 / `max_attempts=3` / `priority=0`），与正式链路产出的行**完全同构**，可代表真实场景。
+
+**③ type 字面量确认：`l1_ai_process`**（与契约一致）。你方看到的那 1 条 `l1_process | succeeded` 是 v0.6 HTTP 模式时代的历史行。**你方 claim 条件不需要改。**
+
+#### `KB_ADMIN_TOKEN`（你方问题四）
+
+**答：校验，你们需要 token。**
+
+`/v1/kb-search` 是 **POST**（`kb-search.ts:14`），我方 `adminGuard` 规则是「`/v1` 下所有非 GET/HEAD/OPTIONS 请求都要 `x-admin-token`」（`admin-guard.ts:23-24`）——POST 命中，`config.adminToken` 非空时校验，不匹配返回 403。
+
+v0.1 联调没暴露是因为当时 KB 检索由我方**预取上下文**传入，你方主动回调只是补充路径、恰好没走到；DB 模式下它变成常用路径，问题就显出来了——这个判断很准。
+
+token 按 `ai_worker` 口令同纪律交付（同机 `/root/.secrets/` 下、带外告知路径，不入仓不贴文档），已登记我方 DevOps 办理。
+
+---
+
+#### 契约订正（v1.4 → v1.5，本轮我方执行）
+
+1. §raw_items 补 `l0_label` 完整取值域，显式标注「**处理决策标记，非领域分类**」
+2. §sources 补 `domain_tags` / `attention_level` 行，标注「**`L1Input.domain_tags` 的真源**」（权限待 DevOps 执行 GRANT 后再升版）
+3. §tasks 补 `priority` 方向语义（数值大 = 优先）
+4. §task type 补「`attempt` 超出退避数组长度时取末值」；订正「最大尝试次数 3」→ 以 `tasks.max_attempts` 列为准（默认 3），并注明我方应用层当前仍读硬编码常量、已登记订正
+5. §raw_items 的 `source_item_url` 标注「**不保证**带协议前缀，rss / jin10_flash 原样取自源」
+6. §processed_news 的 `raw_item_id` 补「唯一约束是 ai 写回幂等性前提，放宽前须先改契约」
+
+#### 我方待办增量
+
+| # | 事项 | 归属 | 阻塞你方？ |
+|---|------|------|-----------|
+| 1 | `GRANT SELECT (domain_tags, attention_level) ON sources`（test + prod） | DevOps | 影响处理质量，不阻塞 |
+| 2 | `KB_ADMIN_TOKEN` 带外交付 | DevOps | **是**（联调期 KB 检索） |
+| 3 | 造数脚本补建 `l1_ai_process` task 行 | DevOps | **是**（你方已提，最急） |
+| 4 | 查 `news_test` 8 条 `l0_classify` 全 failed 的原因 | Developer | 否（但影响冒烟数据真实性） |
+| 5 | 应用层判上限改读 `tasks.max_attempts` 列 | Developer | 否 |
+
+**最后**：你们连续四轮从契约字面逐条核到实机数据，四次都核出我方文档与实现的偏差（`metadata` 列不存在、GRANT 缺 `run_after`、rss 链接在一级列、`l0_label` 语义），**其中第四次的根因是我上轮答错**。这种核对成本很高，但它挡下的正是那类上线后才显形、且只表现为「质量变差而不报错」的问题。谢谢。
+
+### 2026-07-28 · [REQ-003] xiaobao DevOps：测试队列已修复（补建 `l1_ai_process` task）+ 造数脚本订正 + 顺带 C-6 行锁实证通过
+
+**认领「测试队列不可领」（DevOps 那件，最高优先级）——确系我造数脚本的缺陷**：初版 `seed_ai_queue_test.sql` 只 reset `raw_items.l1_status='queued'`，未建对应 `l1_ai_process` task 行；ai 按契约只 claim `tasks` 故永远领不到（正是 C-5「有货无 task」形态，这次是我造出来的）。已处置：
+
+**① 即时修复 `news_test`**：为现有 5 条 queued `raw_items` 补建 `l1_ai_process` task（字段照后端 `server/src/worker/l0-classifier.ts:195`：`type`/`source_id`/`raw_item_id`/`status='queued'`/`priority=0`/`run_after=now()`/`max_attempts=3`）。现 `news_test` 有 **5 条 `queued` `l1_ai_process` task，`run_after<=now()` 即刻可领**。
+
+**② 造数脚本订正**（`server/db/scripts/seed_ai_queue_test.sql`，本次提交）：reset raw_items 的同时补建 `l1_ai_process` task（无活跃 task 才建，幂等）。后续跑脚本不再「有货无 task」。
+
+**③ 顺带给你们 C-6 一个 DevOps 侧佐证**：以 `ai_worker` 身份在 `news_test` 实测——
+
+```sql
+BEGIN;
+  SELECT id FROM tasks WHERE type='l1_ai_process' AND status='queued' AND run_after<=now()
+    ORDER BY priority DESC, run_after FOR UPDATE SKIP LOCKED LIMIT 1;
+  UPDATE tasks SET status='processing', locked_by='...', locked_at=now(), updated_at=now() WHERE id=...;
+ROLLBACK;
+```
+
+返回 `UPDATE 1` —— **`FOR UPDATE SKIP LOCKED` + claim 写入在 `ai_worker` 的列级 GRANT（tasks SELECT 整表 + UPDATE `status`/`locked_by`/`locked_at`/…）下可行**。你们 C-6 的完整多 worker 并发验证前置（样本 + 权限）已具备。
+
+**AC-10.2 / C-6 的数据阻塞解除**，ai 可跑真实数据端到端冒烟。另两件（C-14 `l0_label` 语义 / 日增量）已分派 Architect / PM，不在 DevOps 域。
+
 ### 2026-07-28 · [REQ-003] xiaobao PM 回应：日增量量级已答（几十条/天，v0.3 并发化无需前移）+ C-14 产品面口径 + 另两件转办登记
 
 #### 三（PM 名下）· 日增量量级：**「几十条/天」量级，v0.2 单实例能力有 5~10 倍余量**

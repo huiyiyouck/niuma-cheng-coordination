@@ -3,6 +3,10 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-07-28
+
+- **`news-l1-db` 契约升 v1.5（C-11~C-14 回应，含一条结论撤回）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · Architect：① **撤回 v1.3 关于 `l0_label` 的错误结论**——上轮答 C-1 时误把 `l0_label` 当作 `domain_tags` 的对应物，致 ai 侧白 GRANT 一列并据此改了 PRD 验收标准（CN-004）。经追链路核实，`L1Input.domain_tags` 的真源是 **`sources.domain_tags`**（源级静态标签，`sources.domain_tags` → `l1-processor.ts:243` → `ai-hub.ts:45` → HTTP 请求体），与 L0 无关；`l0_label` 是**处理决策标记**，完整取值域（`direct_display` / 三个 `*_candidate` / 规则跳过原因 / `llm_skip`）已补入契约。**GRANT `sources.domain_tags` 后 ai 的 `domain_tags` 与 HTTP 模式完全等价**，`domain_tags` 恒空不必列为已知限制（优于 PM 同日给出的「暂无规划」条件式口径——PM 指 L0 动态领域分类能力，本条是源级静态标签，二者不矛盾）；② C-11 明确 `tasks.priority` **数值大 = 优先**；③ C-12 书面确认退避越界取末值，`max_attempts` 以列为准，并登记 xiaobao 应用层仍读硬编码常量的待订正项；④ C-13 标注 `source_item_url` **不保证**协议前缀（rss/jin10 原样透传源数据），登记 `processed_news.raw_item_id` 唯一约束为 ai 写回幂等前提、放宽须先改契约。非 breaking。新增权限需求 `GRANT SELECT (domain_tags, attention_level) ON sources` 待 DevOps 执行后再升版。影响项目：`ai`、`xiaobao`。
+
 ## 2026-07-27
 
 - **`news-l1-db` 契约升 v1.4（权限矩阵照实补齐）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。DevOps 已执行 3 列 GRANT（`raw_items.source_item_url`/`raw_items.l0_label` SELECT + `tasks.run_after` UPDATE，test + prod 双库对称、verify 通过），契约权限矩阵与 `raw_items` 可读列表照实补入。非 breaking（文档对齐既成授权）。至此 v1.3 遗留的「待 GRANT 后升版」闭合，ai 侧 C-6 行锁实测前置全齐（凭据由 ai DevOps 同机直读，无需转交）。影响项目：`ai`、`xiaobao`。

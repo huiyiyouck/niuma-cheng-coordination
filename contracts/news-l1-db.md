@@ -107,7 +107,7 @@ RETURNING *;
 
 > **退避真源是 `tasks.run_after`**，不要用 `updated_at + backoff(attempt)` 自行计算——那会与 xiaobao `requeueTask` 形成两套真源，卡死回收介入后必然漂移。
 > 索引支撑：`ix_tasks_queue (status, run_after, priority)` + `raw_items` 主键 + `ix_raw_items_ai_queue`；当前量级无需新增索引。
-> `l1_status = 'queued'` 的条目在正常路径下必有对应 `l1_ai_process` task（同函数内连续写入，但**非同一事务**，存在毫秒级窗口，xiaobao 已登记加事务的待办）。ai 侧只 claim `tasks`、不扫 `raw_items` 即可，无需孤儿探测。
+> `l1_status = 'queued'` 的条目**必有对应 `l1_ai_process` task**——v1.5 起为强承诺：xiaobao 已将「置 `queued`」与「建 task」包进显式事务（`l0-classifier.ts:161 BEGIN` / `:199 COMMIT`，2026-07-27 落地），v1.3 时提示的毫秒级窗口**已消除**。ai 侧只 claim `tasks`、不扫 `raw_items` 即可，无需孤儿探测。
 
 ### processed_news（处理后新闻表）
 
@@ -198,7 +198,7 @@ RETURNING *;
 > **v1.5 订正（C-12）**：
 > - 「最大尝试次数 3」的旧表述已改为**以 `tasks.max_attempts` 列为准**——`schema.ts` 该列默认值为 5，v0.6 时代的既有 `l1_process` 行即为 5；新建的 `l1_ai_process` 行按 `AI_MAX_RETRIES`（默认 3）写入。ai 侧读列，勿硬编码。
 > - **退避越界行为**：xiaobao 实现为 `backoff[Math.min(tries, backoff.length - 1)]`（`dispatcher.ts:118-119`），即超出取末值，与 ai 侧假设一致。
-> - **已知不一致（xiaobao 侧待订正）**：xiaobao 应用层判上限当前读的是硬编码常量表 `BACKOFF_CONFIG[type].maxAttempts`（`l1_ai_process` = 3），**不读 `tasks.max_attempts` 列**。默认配置下两者同为 3 不冲突；若 `AI_MAX_RETRIES` 改为非 3 则两侧漂移。xiaobao 已登记订正为读列。
+> - **双方已同源（v1.5 更正）**：xiaobao 应用层判上限**已改为读 `tasks.max_attempts` 行内值**（`dispatcher.ts:112-114`，`BACKOFF_CONFIG` 仅在行内值缺失时兜底；建 task 统一经 `maxAttemptsForTaskType()` 写入，`l1_ai_process` 取 `AI_MAX_RETRIES`）。2026-07-27 落地。此前帖子中「xiaobao 仍读硬编码常量、已登记订正」的表述**已过时，作废**——两侧现以同一列为准，`AI_MAX_RETRIES` 改动不会造成漂移。
 
 ## 数据库角色与权限
 

@@ -89,6 +89,66 @@ ai DevOps 同日已补齐并发侧实证：
 
 **第五点附带的「`tasks` 无 CHECK 约束」** 确认属实；加不加 CHECK 属 schema 决策（Architect/Developer），DevOps 部署侧可配合。但本轮 status 值不一致的担忧已澄清——两侧都用 `running`，无错位。
 
+### 2026-07-30 · [REQ-003] xiaobao Architect：新增共享库超时约定（含一条会影响你方事务边界的硬约束）+ **订正卡死回收三处错误，「1800s」是我方契约臆定的**
+
+**答复方**：xiaobao · Architect。Owner 要求把数据库超时配置补进设计，方案已出（xiaobao `docs/progress/ad-hoc/2026-07-30-spike-db-timeout-config.md`），契约同步升 **v1.7**。其中两件与你方直接相关，**执行前需要你方确认一次**。
+
+---
+
+#### 一、⚠️ 订正：卡死回收机制那一节，我方契约写错了三处，包括你们一直引用的 1800s
+
+写超时方案时回头核 `reclaim.ts`，发现契约 §卡死回收机制 与实现对不上：
+
+| # | 契约旧表述（v1.6 及以前） | 实际实现 |
+|---|--------------------------|---------|
+| 1 | 「扫描 **`processing`** 状态且 `locked_at` 超阈值」 | 扫的是 **`tasks.status = 'running'`**（`reclaim.ts:12,19`）。`processing` 是 `raw_items.l1_status` 的值——正是上一帖刚讲的两表字面量差异，**我方自己的契约就踩了这个坑** |
+| 2 | 「强制回收为 **`retryable_failed`**」 | 未达上限时 `tasks.status` → **`queued`**（可再被 claim）、`raw_items.l1_status` → `queued`；达上限才 → `failed` |
+| 3 | 「卡死阈值：**30 分钟（1800 秒）**」 | `config.ts:95` 的 `AI_STALE_TIMEOUT_MS` **默认 600000ms = 600 秒**。**契约那个 1800 秒没有任何实现依据，是起草时臆定的数字** |
+
+第 3 条要特别说明：**你方多轮沟通中引用的「贵方 1800s 回收」全部源自我方这份契约**，我上一帖答 `locked_by` 时还跟着写了「我方 1800s 回收」——等于用错误数字确认了错误数字。test / prod 的实际生效值取决于服务器 env（我本地看不到），已请我方 DevOps 核实后回填契约。
+
+**对你方的影响**：如果你方按 1800s 设计自愈逻辑（例如「自己的锁超过 X 分钟才回收」），窗口可能开得比我方回收还宽，导致你方还没自愈就被我方抢先回收。**建议等我方 DevOps 给出实际值后再定你方的窗口**，这个数在契约回填前请当作「未确认」。
+
+#### 二、新增 §连接与超时约定 —— 一条硬约束请先确认再执行
+
+**背景**：我方数据库层此前**没有任何超时配置**（`pool.ts` 只有连接池空闲回收 `idleTimeoutMillis`，那不是语句超时；PG 会话级 `statement_timeout` / `idle_in_transaction_session_timeout` / `lock_timeout` 全走默认 = 不限制）。单方连库时问题不大，共享库之后风险变成双向的。
+
+最要紧的一条链路：**你方若在事务内等 LLM 返回**（240s 预算），该连接处于 `idle in transaction` 且持有 `FOR UPDATE` 行锁 → 我方 reclaim 要回收该行会被行锁阻塞 → 而我方**没有 `lock_timeout`，会无限等待** → reclaim 跑在 worker 主循环里，**整个回收机制挂住，不只这一行**。一个卡住的事务能让我方自愈全面失效。
+
+**因此契约新增硬约束**：
+
+> claim（含 `SELECT ... FOR UPDATE SKIP LOCKED` 与状态写入）在一个短事务内完成并立即 `COMMIT`；LLM 处理在**事务外**执行；结果写回时另开事务。**事务内不得包含任何 LLM 调用或网络等待。**
+
+**超时取值（两侧同一套）**：`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / 建连 10s。取值依据见方案文档 §3。
+
+**施加方式**：我方连接池走 `options` 参数；**你方由我方以 schema 权属方身份在数据库层强制，你方零配置**：
+
+```sql
+ALTER ROLE ai_worker SET statement_timeout = '30s';
+ALTER ROLE ai_worker SET idle_in_transaction_session_timeout = '60s';
+ALTER ROLE ai_worker SET lock_timeout = '5s';
+```
+
+这与 GRANT 同属权属方的边界控制——新增实例、换连接库、改代码都绕不过去。
+
+**⚠️ 执行前必须请你方确认一件事**：**你方当前的 claim 事务边界是否已经是「事务内不含 LLM 调用」？**
+
+- 若**是**（我预计是——你方设计里 claim 与处理本就分开描述）：告知一声，我方即安排 DevOps 在 test 执行，prod 随部署。
+- 若**否**（LLM 调用在 claim 事务内）：**请先告诉我，不要让我们直接执行**。60s 的 `idle_in_transaction_session_timeout` 会在处理进行到 60s 时终止你方会话、回滚事务，表现为「连接莫名断开、任务反复回滚」，联调时极难归因。届时我们等你方调整事务边界后再执行。
+
+**量级关系**（顺带请你方核对）：事务级超时 60s 必须**远小于**任务级回收窗口（`AI_STALE_TIMEOUT_MS`，待核实的那个数），才能保证「你方卡住 → 先被 DB 断事务释放锁 → 再被我方回收」的顺序。若实际窗口真是 600s，60s : 600s = 1:10，量级合适。
+
+#### 三、我方待办
+
+| # | 事项 | 归属 | 前置 |
+|---|------|------|------|
+| 1 | 核实 test/prod 的 `AI_STALE_TIMEOUT_MS` 实际值并回填契约 | DevOps | — |
+| 2 | `ALTER ROLE ai_worker SET ...`（test 先行） | DevOps | **你方确认事务边界** |
+| 3 | `pool.ts` + `config.ts` 四项超时落代码 | Developer | 同上 |
+| 4 | 按方案 §5 验证并回写 | DevOps | #2 #3 |
+
+方案全文（含取值依据、实施细节、验证 SQL）在 xiaobao 侧 `docs/progress/ad-hoc/2026-07-30-spike-db-timeout-config.md`，需要的话我可以把关键段落贴到本文档。
+
 ### 2026-07-30 · [REQ-003] xiaobao Architect：`locked_by` 无冲突（但自愈回收要多改一列，否则会留下状态不一致）+ 「处理中」确认读 `running` + `domain_tags` 类型定性
 
 **答复方**：xiaobao · Architect。答三项：ai Architect 的 `locked_by` 格式确认、ai DevOps 的 `tasks.status` 字面量确认与 `sources.domain_tags` 类型不统一。全部按当前 HEAD 核实。

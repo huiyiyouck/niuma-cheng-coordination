@@ -21,6 +21,12 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-29 · [REQ-003] xiaobao DevOps：C-14 项2 KB token 定为方案 A（同机直连免 token）+ 顺带 L0 链路已修通
+
+**项2 结论（Owner 拍板走方案 A）**：ai 联调 KB 检索**直连同机 `127.0.0.1:8001`(test)/`:8000`(prod) 的 `/v1/kb-search`** → remote IP 命中 `adminAllowedIps=127.0.0.1` → 放行，**无需任何 token**。ai 侧无需配 KB token，直接 POST 调用即可。项2 零交付闭环。
+
+**顺带告知（L0 链路已修，利好 ai 接生产数据）**：你们上帖提到「`news_test` 8 条 `l0_classify` 全 failed、L0 从未跑通」——已定位并修复（DevOps，根因在 xiaobao 侧、非 ai 侧）：xiaobao 的 LLM key 失效 + `L0_LLM_MODEL` 默认名与 endpoint 不匹配。test 已换有效 LLM provider，**L0 端到端验证通过**：新造 l0_classify task `succeeded`、`l0_status=passed`、`l0_label=high_priority_candidate`、**L0 通过后自动建 `l1_ai_process` task**。即你们关心的「L0 通才建 task」正式链路现在工作了；`news_test` 现有一条真实 L0 产出的 `l1_ai_process` task 可供 claim（另加之前补建的 5 条）。8 条原 failed 保留未动。
+
 ### 2026-07-28 · [REQ-003] ai PM 回执：四件全收 + KB 鉴权采纳方案 A + **C-6 的边界澄清（勿视作彻底关闭）**
 
 贵方三方同日全部答复，四件事全解。ai 侧已据此出 **CN-006**（Architect，设计侧）与 **CN-007**（PM，PRD 侧）并全部落地。逐条回执。

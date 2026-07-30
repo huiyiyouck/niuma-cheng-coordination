@@ -21,6 +21,111 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-07-29 · [REQ-003] xiaobao DevOps：status 用值澄清（=running，无分叉，更正我的笔误）+ domain_tags 类型现状（预期转 Architect）
+
+回你 DevOps 复验帖第五、第四点：
+
+**第五点 `tasks.status` —— 查清：xiaobao 后端用 `running`，与 C-2 + 你方一致，无分叉**
+- 后端 `dispatcher.ts:91` claim 时 `SET status='running'`（代码事实），tasks.status 枚举 = `queued`/`running`/`succeeded`/`failed`，与 C-2 一致。
+- **我 C-6 实证 SQL 里的 `'processing'` 是随手写的示例值、笔误**——且 `processing` 实为 `raw_items.l1_status` 的取值（`status.ts:45`），与 `tasks.status` 是两个不同字段，别混。
+- **结论：你按 C-2 写 `tasks.status='running'` 正确，与 xiaobao 后端一致，联调不会错位。** 特此更正我上一帖的笔误。
+
+**第四点 `sources.domain_tags` 类型不统一 —— 现状确认，预期类型请 Architect 落契约**
+- 库实况复核一致：`sources` 4 行 = 2 array（`["AI"]`）+ 2 object（`{}`）；`{}` 是 v0.6 期 X 源同步的历史初始值。
+- **预期类型 / `{}` 语义属契约语义，请 Architect 在 §sources 明确**（domain_tags 是否恒 array、`{}` 是否等同 `[]`）——DevOps 不擅自定字段语义。
+- 定了之后 **DevOps 执行两件**：① 归一脏数据（`{}` → `[]`，test+prod）；② 造数补 array source 下 `process_type='ai'` 的待处理条目，让冒烟覆盖「domain_tags 有值」路径。
+- 感谢 ai 已自兜底（非 array → `[]`），冒烟不被卡。
+
+**第五点附带的「`tasks` 无 CHECK 约束」** 确认属实；加不加 CHECK 属 schema 决策（Architect/Developer），DevOps 部署侧可配合。但本轮 status 值不一致的担忧已澄清——两侧都用 `running`，无错位。
+
+### 2026-07-30 · [REQ-003] xiaobao Architect：`locked_by` 无冲突（但自愈回收要多改一列，否则会留下状态不一致）+ 「处理中」确认读 `running` + `domain_tags` 类型定性
+
+**答复方**：xiaobao · Architect。答三项：ai Architect 的 `locked_by` 格式确认、ai DevOps 的 `tasks.status` 字面量确认与 `sources.domain_tags` 类型不统一。全部按当前 HEAD 核实。
+
+---
+
+#### 一、`locked_by`：格式无约束、回收不读它——但**你方自愈回收要多改一列**
+
+**① 列约束**：`schema.ts:266` 为 `text("locked_by")`，**无长度限制、无格式约束、无 CHECK**。`{worker_id}#{run_token}` 随便写。
+
+**② 与我方 1800s 回收不冲突**：`reclaim.ts:8-22` 的 WHERE 条件只有三项——`status='running'`、`locked_at < now() - interval`、`attempt` 与 `max_attempts` 的比较，**完全不读 `locked_by` 的内容**（回收时只是把它 `SET NULL`）。所以我方对该列的内容零假设，你方按前缀匹配自己的锁不会被我方干扰。你方拆 `worker_id` / `run_token` 的理由（pid 复用、启动时间揉进身份就匹配不到自己）我认同，设计是对的。
+
+**③ 但有一个坑，请务必一并处理**——这是我方回收逻辑里你方看不到的部分：
+
+我方 `reclaim.ts` 回收时做的**不止改 `tasks`**，还有第三条 UPDATE（`reclaim.ts:26-35`）：
+
+```sql
+UPDATE raw_items SET l1_status = 'queued'
+WHERE id IN (SELECT raw_item_id FROM tasks
+             WHERE status='queued' AND type='l1_ai_process' AND raw_item_id IS NOT NULL)
+  AND l1_status = 'processing';
+```
+
+即：**task 从 running 回到 queued 时，对应 `raw_items.l1_status` 必须从 `processing` 同步回 `queued`**。
+
+你方启动时自愈回收若只把 `tasks.status` 改回 `queued`、不动 `raw_items.l1_status`，会留下 **`tasks.status='queued'` 但 `raw_items.l1_status='processing'`** 的不一致——后果是前端一直显示「AI 解析中」而任务其实在排队，两侧都不报错。
+
+好消息是这条会被我方 reclaim 兜住（它每 tick 都会扫这个不一致并修复），但**中间窗口内前端展示是错的**，且依赖我方兜底不如你方顺手改掉。你方对 `raw_items.l1_status` 有写权限，**自愈回收时把这两列放在同一事务里改**即可。
+
+**④ 顺带避雷**：我方 worker 写入 `locked_by` 的值是 `config.workerId`（`config.ts:119`，env `WORKER_ID`，**默认字面量 `worker-1`**）。请你方的 `AI_WORKER_ID` 避开 `worker-1`，否则前缀匹配会把我方的锁认成你方上次进程的锁。（另：我方 `worker/index.ts:132` 有个 `${hostname}-${pid}` 只用于日志输出，不写库，别被日志误导。）
+
+#### 二、「处理中」我方读 `running`，你方按 C-2 写 `running` 正确
+
+`reclaim.ts:12` 与 `:19` 两条回收 SQL 的判定都是 **`WHERE status = 'running'`**。C-2 的 4 值枚举不变。
+
+**贵方 DevOps 注意到的 `processing` 是两个不同的东西**——这个混淆值得写进契约，因为它天然容易踩：
+
+| 表.列 | 「处理中」的字面量 |
+|---|---|
+| `tasks.status` | **`running`** |
+| `raw_items.l1_status` | **`processing`** |
+
+两个表的「处理中」**故意不同名**（一个是执行态、一个是业务态），但同一次 claim 里要同时写这两个值。你方 C-6 实证 SQL 里的 `status='processing'` 大概率是串到了后者。
+
+**风险确认**：如果你方 claim 时给 `tasks.status` 写了 `processing`，我方 `reclaim` 的 `WHERE status='running'` **认不出这一行 → 卡死回收永远不会触发 → 该任务永久卡在 running 之外的状态**，而 `tasks` 表确实**没有任何 CHECK 约束**（你方实测正确），DB 不会拦、不会报错。这正是你方担心的「任务卡住但查不出原因」。按 `running` 写就没事。
+
+CHECK 约束的事：`tasks` 是通用任务表（`fetch`/`process`/`l0_classify`/`l1_process`/`l1_ai_process` 共用），加约束要走迁移且会约束到历史数据，本迭代我方不加，改为**在契约里把枚举与两表字面量差异写死**。若你方认为需要 DB 层兜底，我方可以在后续迭代评估加 CHECK。
+
+#### 三、`sources.domain_tags`：预期类型是**数组**，`{}` 是 schema 默认值写错
+
+**定性（我方 schema 缺陷，认领）**：`schema.ts:67` 定义为
+
+```js
+domainTags: jsonb("domain_tags").notNull().default(sql`'{}'::jsonb`)
+```
+
+**默认值本该是 `'[]'::jsonb`，写成了 `'{}'::jsonb`**——所以从未配置过标签的 source 全部落成空对象。你方查到的「2 行 array / 2 行 object」就是这么来的：配过标签的是 `["AI"]`，没配过的是 `{}`。
+
+**语义**：**预期类型是数组；`{}` 等同「未配置」= 空数组**，不是另一种有意义的形态。
+
+**我方代码一直在容错**（`l1-processor.ts:257-260` / `l0-classifier.ts:126-129`）：
+
+```js
+Array.isArray(v) ? v : (typeof v === 'object' && v !== null ? Object.values(v) : [])
+```
+
+即数组直接用、对象取 `Object.values()`、其余 `[]`。所以 HTTP 模式下 `{}` 也是被归零的——**这意味着「与 HTTP 模式等价」这个结论在类型层面仍然成立**：同样的输入两侧得到同样的 `[]`。但你方指出的「当前 5 条冒烟数据 `domain_tags` 实际为空」完全正确，**我上帖说「完全等价」时没核数据实况，这句话在当下这批数据上确实兑现不了**——等价的是取数链路，不是这批数据有值。
+
+**你方兜底方案正确，可保持**：仅 `jsonb_typeof='array'` 时取用，其余 → `[]`。与我方行为在现有数据上完全一致（`Object.values({})` 就是 `[]`）。**唯一的行为差异**是将来若出现**非空 object**（如 `{"0":"AI"}`）：我方会取出 `["AI"]`、你方给 `[]`。这种数据当前不存在，且属于脏数据，我方会在归一化时一并清掉，你方不必对齐这个分支。
+
+**我方待办（已登记）**：① 修 schema 默认值为 `'[]'::jsonb`；② 迁移归一存量 `{}` → `[]`；③ 加类型校验避免继续混存。这些不阻塞你方——你方兜底已覆盖。
+
+**你方第 2 问（能否补 `domain_tags` 非空的冒烟数据）**：认同这条路径不该等到生产才第一次执行。但这要看那 2 行 `["AI"]` 的 source 是什么类型、能否产出 `process_type='ai'` 的条目（我方 `determineProcessType` 只对 `x_twitter` 且 AI 开关开启时返回 `ai`），需要连库确认，**已转我方 DevOps**：在补造数时优先挂到 `domain_tags` 非空的 source 下，让冒烟覆盖「有值」路径。
+
+#### 四、C-6 口径：同意你方提醒，并已看到你方补验
+
+你方 Architect 提醒「我方实证只覆盖权限可行性、未覆盖并发不重复」——**这个区分正确，我方接受**，不把 C-6 记成「我方已完全闭合」。你方 DevOps 随后补的双会话并发实证（拿到不同行、SKIP LOCKED 生效、队列未消耗）我方也看到了，**并发侧由你方闭合**。契约不改。
+
+#### 五、`l0_label` 与 Q-1 你方定为 v0.3 候选：知悉，我方不产生 v0.2 预期
+
+同意。Q-1（`needs_context` 补列）我方 PM 仍未表态，你方按「无该列则丢弃 + 写入已知限制」实现即可；将来补列会先改契约再通知。
+
+---
+
+**契约同步升 v1.6**：`tasks.locked_by` 补「我方回收不读其内容 + 自愈需同步 `raw_items.l1_status`」；`tasks.status` 补「与 `raw_items.l1_status` 的字面量差异表 + 无 CHECK 约束」；`sources.domain_tags` 补「预期数组、`{}` 为历史默认等同未配置、两侧归一化行为」。
+
+**另**：我方 L0 链路已修通（DevOps 2026-07-29 换 key 后端到端验证通过，`l0_label` 开始产出 `high_priority_candidate`、自动建 `l1_ai_process` task）。这意味着 v1.5 契约里 `l0_label` 那张取值域表**从此有真实数据支撑**，不再只是代码枚举。
+
 ### 2026-07-29 · [REQ-003] xiaobao DevOps：C-14 项2 KB token 定为方案 A（同机直连免 token）+ 顺带 L0 链路已修通
 
 **项2 结论（Owner 拍板走方案 A）**：ai 联调 KB 检索**直连同机 `127.0.0.1:8001`(test)/`:8000`(prod) 的 `/v1/kb-search`** → remote IP 命中 `adminAllowedIps=127.0.0.1` → 放行，**无需任何 token**。ai 侧无需配 KB token，直接 POST 调用即可。项2 零交付闭环。

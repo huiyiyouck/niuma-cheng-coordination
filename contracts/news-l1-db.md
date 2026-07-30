@@ -1,7 +1,7 @@
 # 契约：news-l1-db（新闻 L1 数据库边界契约）
 
 - 契约 id：`news-l1-db`
-- 版本：v1.5（2026-07-28 Architect 答复 C-11~C-14：**撤回 v1.3 关于 `l0_label` 的错误结论**——`L1Input.domain_tags` 真源是 `sources.domain_tags`（源级静态标签，非 L0 产物），`l0_label` 是处理决策标记，两者语义无关；补 `l0_label` 完整取值域枚举；§sources 补 `domain_tags`/`attention_level` 行（权限待 GRANT）；明确 `priority` 方向为「数值大 = 优先」；退避越界取末值 + `max_attempts` 以列为准并登记 xiaobao 侧待订正的硬编码；标注 `source_item_url` 不保证协议前缀；登记 `processed_news.raw_item_id` 唯一约束为 ai 幂等前提。见 C-11/C-12/C-13/C-14）。v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
+- 版本：v1.6（2026-07-30 Architect：① `locked_by` 明确无格式约束、xiaobao 回收不读其内容、xiaobao 侧写入值为 `WORKER_ID`（默认 `worker-1`）请 ai 避开；② **新增「处理中」两表字面量差异专节**——`tasks.status='running'` vs `raw_items.l1_status='processing'`，并说明 `tasks` 无 CHECK 约束、写错 `processing` 会导致卡死回收永不触发；③ **新增 ai 自愈回收必须同步 `raw_items.l1_status` 的要求**，否则留下「前端显示解析中但任务在排队」的不一致；④ `sources.domain_tags` 类型定性——预期数组，`{}` 系 `schema.ts:67` 默认值误写（应为 `'[]'`）、语义等同未配置，附两侧归一化行为与数据实况。见 ai 2026-07-28 两帖）。v1.5（2026-07-28 Architect 答复 C-11~C-14：**撤回 v1.3 关于 `l0_label` 的错误结论**——`L1Input.domain_tags` 真源是 `sources.domain_tags`（源级静态标签，非 L0 产物），`l0_label` 是处理决策标记，两者语义无关；补 `l0_label` 完整取值域枚举；§sources 补 `domain_tags`/`attention_level` 行（权限待 GRANT）；明确 `priority` 方向为「数值大 = 优先」；退避越界取末值 + `max_attempts` 以列为准并登记 xiaobao 侧待订正的硬编码；标注 `source_item_url` 不保证协议前缀；登记 `processed_news.raw_item_id` 唯一约束为 ai 幂等前提。见 C-11/C-12/C-13/C-14）。v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
 - 状态：生效中（ai 已承接 REQ-003，2026-07-25）
 - schema 权属方：`xiaobao`（拥有建表改表、角色管理、触发器创建权限）
 - worker 方：`ai`（AI 处理中枢 / Agent Hub）
@@ -141,8 +141,14 @@ RETURNING *;
 | `type` | varchar | 源类型（x_twitter / rss / ...） |
 | `identity` | varchar | 源标识 |
 | `config` | jsonb | 源配置 |
-| `domain_tags` | jsonb | **`L1Input.domain_tags` 的真源**（v1.5 新增，见 C-14）。信息源级静态领域标签，与 HTTP 模式**同字段同数据**：`sources.domain_tags` → `l1-processor.ts:243/257-278` → `ai-hub.ts:45` → HTTP 请求体。ai 侧经 `raw_items.source_id → sources.id` 主键 join 取值即与 HTTP 模式等价。**权限待 GRANT 执行后生效** |
+| `domain_tags` | jsonb | **`L1Input.domain_tags` 的真源**（v1.5 新增，见 C-14）。信息源级静态领域标签，取数链路与 HTTP 模式同源：`sources.domain_tags` → `l1-processor.ts:243/257-278` → `ai-hub.ts:45` → HTTP 请求体。ai 侧经 `raw_items.source_id → sources.id` 主键 join 取值。**类型见下方说明**（v1.6） |
 | `attention_level` | varchar(20) | 源关注级别（`regular` 等）。HTTP 模式的 L0 输入亦使用；ai 侧按需取用（v1.5 新增，权限待 GRANT） |
+
+> **v1.6 `domain_tags` 类型说明**：**预期类型是 jsonb 数组**（如 `["AI"]`）。但 `schema.ts:67` 的列默认值误写为 `'{}'::jsonb`（应为 `'[]'::jsonb`），因此**从未配置过标签的 source 存的是空对象 `{}`**——`{}` 的语义等同「未配置」= 空数组，**不是另一种有意义的形态**。
+> - xiaobao 侧一直做归一化容错：`Array.isArray(v) ? v : (typeof v === 'object' && v !== null ? Object.values(v) : [])`（`l1-processor.ts:257-260` / `l0-classifier.ts:126-129`）。
+> - **ai 侧推荐做法**：仅 `jsonb_typeof = 'array'` 时取用，`object` / `null` / 缺失一律映射为 `[]`。在现有数据上与 xiaobao 行为完全一致（`Object.values({})` 即 `[]`）。唯一差异是**非空 object**（如 `{"0":"AI"}`）——xiaobao 会取出 `["AI"]`、ai 给 `[]`；该形态属脏数据、当前不存在，xiaobao 归一化时会清除，ai 侧不必对齐此分支。
+> - xiaobao 已登记：修默认值为 `'[]'::jsonb` + 迁移归一存量 `{}` → `[]` + 加类型校验。
+> - **数据实况提示**：截至 2026-07-28，`sources` 4 行中 2 行为 `["AI"]`、2 行为 `{}`，且当前 5 条冒烟条目对应的 source 全部为 `{}`。故「与 HTTP 模式等价」指的是**取数链路等价**，不代表这批测试数据有值。
 
 > **v1.5 重要订正（C-14）**：v1.3 曾答复「L0 分类结果存在 `raw_items.l0_label`，GRANT 该列即可消除 `domain_tags` 恒空」——**该结论错误并已撤回**。`L1Input.domain_tags` 从来不是 L0 的产物，而是本表的源级静态标签；`l0_label` 是处理决策标记（见 §raw_items）。两列语义无关。
 
@@ -159,7 +165,7 @@ RETURNING *;
 | `run_after` | timestamptz NOT NULL | **退避时间，claim 过滤依据** | 可更新（GRANT 已就绪，v1.4） |
 | `max_attempts` | int NOT NULL | 该 task 的尝试上限（建任务时按 `AI_MAX_RETRIES` 写入） | 只读 |
 | `priority` | int NOT NULL | 优先级（默认 0）。**方向：数值大 = 优先**（v1.5 明确，见 C-11）——xiaobao `claimTask` 为 `ORDER BY priority DESC, created_at ASC`。ai 侧 claim 须按 `priority DESC` 排序，否则优先级设置不生效且不报错 | 只读 |
-| `locked_by` | text | 锁定者（worker 标识） | 可更新 |
+| `locked_by` | text | 锁定者（worker 标识）。**无长度限制、无格式约束**；xiaobao 回收逻辑**不读该列内容**（只 `SET NULL`），ai 可自由编码（如 `{worker_id}#{run_token}`）。xiaobao worker 写入的是 `config.workerId`（env `WORKER_ID`，**默认字面量 `worker-1`**）——ai 的 worker 身份请避开该值，以免前缀匹配误判（v1.6） | 可更新 |
 | `locked_at` | timestamptz | 锁定时间 | 可更新 |
 | `attempt` | int | 已尝试次数（claim 时 +1，**重试上限判定真源**） | 可更新 |
 | `updated_at` | timestamptz | 更新时间 | 可更新 |
@@ -167,6 +173,25 @@ RETURNING *;
 | `last_error_kind` | varchar | 最近错误类型 | 可更新 |
 
 > **v1.3 订正**：v1.2 及以前列有 `metadata jsonb（含 raw_item_id 等）`，**该列不存在**，系起草错误（见沟通文档 C-9）。`raw_item_id` 是一级 uuid 列，关联走主键，无需 jsonb 表达式索引。
+
+#### ⚠️ 「处理中」在两个表里字面量不同（v1.6，务必区分）
+
+| 表.列 | 「处理中」的值 | 性质 |
+|---|---|---|
+| `tasks.status` | **`running`** | 执行态 |
+| `raw_items.l1_status` | **`processing`** | 业务态 |
+
+同一次 claim 要同时写这两个值，但**字面量故意不同**。
+
+- **`tasks` 表没有任何 CHECK 约束**（`pg_constraint` 中 `contype='c'` 为空），写错值 DB 不拦、不报错。
+- **若 ai 给 `tasks.status` 写成 `processing`**：xiaobao 卡死回收的判定是 `WHERE status='running'`（`reclaim.ts:12,19`），**认不出该行 → 回收永不触发 → 任务永久卡住**，且两侧都无报错。这是最难排查的一类错位，请严格按 `running` 写。
+- xiaobao 本迭代不加 CHECK 约束（`tasks` 是 5 种 type 共用的通用表，加约束需迁移并约束历史数据），以本契约的枚举为准；如需 DB 层兜底可在后续迭代评估。
+
+#### ⚠️ ai 自愈回收「自己上次进程遗留的锁」时必须同步两列（v1.6）
+
+xiaobao 的 1800s 卡死回收除了改 `tasks`，还有第三条 UPDATE（`reclaim.ts:26-35`）：task 从 `running` 回到 `queued` 时，把对应 `raw_items.l1_status` 从 `processing` 同步改回 `queued`。
+
+**ai 启动时自愈回收若只改 `tasks.status` 不改 `raw_items.l1_status`**，会留下 `tasks.status='queued'` 但 `raw_items.l1_status='processing'` 的不一致——前端持续显示「AI 解析中」而任务其实在排队，两侧均不报错。xiaobao 的 reclaim 每 tick 会扫并修复该不一致（有兜底），但中间窗口内展示是错的。**请在同一事务内同时改这两列**（ai 对 `raw_items.l1_status` 有写权限）。
 
 #### tasks.status 枚举（v1.3 补充，照 xiaobao 实现）
 

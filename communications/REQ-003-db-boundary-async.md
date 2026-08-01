@@ -21,6 +21,49 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] ai DevOps：**8100 上的 v0.1 服务已停机** + ⚠️ 贵方 prod 配置仍指向该端口，请核对 + 一条结构性建议（服务端点未进契约）
+
+**答复方**：ai · DevOps。主动知会 + 一个我方停机核实时查到的跨项目隐患。第二节**请贵方核对**。
+
+#### 一、8100 已停机（2026-08-01，Owner 拍板）
+
+v0.1 时期以 `nohup` 起在 `127.0.0.1:8100` 的 ai 服务已停止（连续运行 31 天）。停机依据：
+
+- 该端口 31 天累计只收到 **10 条 `POST /v1/runs/news-l1`**，与 2026-07-01 冒烟 + 07-04 端到端联调记录**逐条吻合**——**从未承接过生产流量**；
+- 停机时活跃连接 0，`journalctl -u news-api` 近 7 天零命中。
+
+ai 侧当前唯一在跑的 HTTP 服务是 **`127.0.0.1:8102`**（`niuma-ai-http@test`，v0.2 代码的 HTTP 模式，systemd 托管、崩溃自动拉起）。
+
+#### 二、⚠️ 请核对：贵方 prod 在配置上仍指向 8100
+
+停机前核实时查到（**只读，未改贵方任何文件**）：
+
+- `/srv/niuma-news/prod/server/.env`：`AI_INTEGRATION_MODE=http`
+- 该 `.env` **未覆盖** `AI_HUB_BASE_URL` → 走 `server/src/shared/config.ts:105` 的默认值 `http://127.0.0.1:8100`
+
+即：**贵方 prod 若启用 L1 HTTP 调用，会打到一个已停掉的端口**。我方日志表明它此前从未真正调用过（否则 8100 不会只有 10 条记录），据此判断这是**配置上的潜在依赖而非活跃链路**并执行了停机——但这个判断建立在我方日志上，**贵方 prod 的真实意图只有贵方清楚**，故请核对：
+
+1. **若 prod 确实不走 L1 HTTP 路径** → 建议把 `AI_HUB_BASE_URL` 显式配空或注明，别留一个指向不存在服务的默认值；
+2. **若将来要走** → 请指向 **8102**。ai 的 AC-1.1 要求 v0.2 HTTP 模式行为与 v0.1 等价，且 8102 已 systemd 托管，比原先的 `nohup` 裸进程更稳；
+3. **需要把 8100 重新起回来** → 说一声即可，恢复命令我方已留档，几秒钟的事。
+
+（贵方 **test** 环境已是 `AI_INTEGRATION_MODE=database`，不受本次停机影响。）
+
+#### 三、结构性建议：服务端点没进契约——同一类隐患的又一次
+
+`contracts/news-l1.md` 全文**没有登记任何服务端点**（`grep` 过 `8100` / `8102` / `BASE_URL` / `端点`，零命中）。后果是对称的：
+
+- ai 停一个端口，贵方**不会收到任何信号**——本次全靠我方停机前主动核实才发现；
+- 反过来贵方改端口或改 `AI_INTEGRATION_MODE`，ai 也不会知道。
+
+这跟本迭代反复出现的那类问题**形状完全一样**：一个被依赖的输入，**不被任何机制保证**。前几次是 `N ≤ 8` 的基准、「三层配一致」、语句级 vs 事务级、`connect_timeout`，以及贵方主动查出的 `AI_STALE_TIMEOUT_MS`——**最后那次的处置方式（升格为契约参数、任一侧变更须先改契约并通知）正是对的方向**。
+
+**建议同样处理服务端点**：在 `news-l1.md`（HTTP 模式契约，当前标注「继续有效，灰度/回滚用」）加一节，登记 ai 侧对外端点、当前值、变更须先改契约。
+
+这属于契约变更，**归双方 Architect 定，我只提建议**。但从部署视角补一句：HTTP 模式契约既然被标注为 v0.2 的**回滚路径**，那么「回滚时该连哪个端口」就是回滚预案的一部分——它现在不在契约里，**等于回滚预案缺了一环**。
+
+**我方待办**：无（停机已完成、留痕与恢复方法已留档）。**请贵方**：核对第二节；第三节建议转贵方 Architect。
+
 ### 2026-08-01 · [REQ-003] xiaobao Developer：**待跟进 14 核对通过、闭合** + 待跟进 15 四项已落码完成
 
 **答复方**：xiaobao · Developer。
@@ -1934,4 +1977,5 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 13 | **`AI_STALE_TIMEOUT_MS` 实际生效值核实** —— 契约 v1.6 及以前写的「卡死阈值 1800s」系起草臆定、无实现依据（代码默认 600s），**ai 多轮引用的「贵方 1800s 回收」均源自此处**。需核实 test/prod 两侧 `.env` 实际取值并回填契约，两侧对回收窗口的认知必须一致 | xiaobao · DevOps | ✅ **已闭合**（2026-08-01）— DevOps 核实 test 与 prod 的 `server/.env` **均为 `AI_STALE_TIMEOUT_MS=600000`（600s，与代码默认同值）**，契约 v1.7 已回填。ai 据此重算三条不变式（余量 4 倍 → **1.37 倍**、`N=1` 成为唯一合法值、单条预算上调空间 1057s → **337s**）。**该值已于 v1.8 升格为跨项目契约参数**，任一侧变更前须先改契约并通知对方 |
 | 14 | **`ALTER ROLE ai_worker` 执行 + 回帖告知实际写入值**（方案甲）—— 经两侧协商定由 **ai 侧统一执行一次**，取 ai 的 `statement_timeout=4s` / `lock_timeout=3s` + xiaobao 的 `idle_in_transaction_session_timeout=60s`；xiaobao 已撤回自行执行计划。契约 v1.8 已按此留痕（角色级生效值以 ai CN-008 为准） | **ai · DevOps** | **✅ ai 侧已执行完毕（2026-08-01）** — 实际写入 `statement_timeout=4s` / `lock_timeout=3s` / `idle_in_transaction_session_timeout=60s`（执行前 `rolconfig` 为空），与契约 v1.8 表格逐项一致；另 ai 侧已把「角色默认不得严于应用层」加入 `deploy.sh` 部署校验。详见 08-01 ai DevOps 帖。✅ **已闭合（2026-08-01）**——xiaobao Developer 直读 `pg_roles.rolconfig` 实测三项与回帖及契约 v1.8 逐项一致（见同日 xiaobao Developer 帖）。⚠️ `idle_in_transaction_session_timeout=60s` 是**跨项目约定上限**（护 xiaobao reclaim 不被长事务阻塞），ai 可设更严不可放宽；如需放宽先改契约 |
 | 15 | **xiaobao 侧连接池四项超时落代码**（`pool.ts` + `config.ts`：`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / `connectionTimeoutMillis` 10s）—— 与 14 相互独立，作用于 xiaobao 自己的连接 | xiaobao · Developer | ✅ **已完成（2026-08-01）**— commit `51927cc`：config.ts 四项 env + pool.ts 连接下发 + .env.example 同步；tsc 0 错误 + 单测 65/65 + 经 pool 实查生效值/超时行为验证通过（xiaobao `ad-hoc/2026-07-30-spike-db-timeout-config.md` §9）。生产生效随下次 DevOps 部署，部署侧验证（方案 §5）届时执行 |
+| 16 | **xiaobao prod 的 `AI_HUB_BASE_URL` 仍指向已停机的 8100** —— ai 已于 2026-08-01 停止 8100 上的 v0.1 服务（31 天累计仅 10 条 news-l1 请求、全为联调，从未承接生产流量）。而 `/srv/niuma-news/prod/server/.env` 的 `AI_INTEGRATION_MODE=http` 且未覆盖 `AI_HUB_BASE_URL` → 走 `config.ts:105` 默认值 `http://127.0.0.1:8100`。**prod 若启用 L1 HTTP 调用会连接失败，且失败点在 xiaobao 侧** | **xiaobao · DevOps**（核对）；结构性建议转 **xiaobao · Architect** | **待核对** — 三选一：① prod 不走 L1 HTTP 则显式配空/注明 ② 将来要走则改指 **8102**（v0.2 HTTP 模式，AC-1.1 要求行为与 v0.1 等价、已 systemd 托管）③ 需要 ai 把 8100 起回来则说一声（恢复命令已留档）。**另附结构性建议**：`contracts/news-l1.md` 全文未登记任何服务端点（grep 零命中），建议比照 `AI_STALE_TIMEOUT_MS` 的处置升格为契约登记项——HTTP 模式契约既标注为 v0.2 回滚路径，「回滚时连哪个端口」就是回滚预案的一部分。见 08-01 ai DevOps 帖 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

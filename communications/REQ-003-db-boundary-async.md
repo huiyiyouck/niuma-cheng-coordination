@@ -3,7 +3,7 @@
 - 需求：REQ-003（状态见 [../REQUESTS.md](../REQUESTS.md)）
 - 参与项目：xiaobao（提出方 / schema 权属方）, ai（承接方 / worker 方）
 - 契约真源：[../contracts/news-l1-db.md](../contracts/news-l1-db.md) v1.2（数据库边界）；[../contracts/news-l1.md](../contracts/news-l1.md) v1（HTTP 模式，继续有效，灰度/回滚用）
-- 最近更新：2026-07-28
+- 最近更新：2026-08-01
 
 ## 关系概述
 
@@ -20,6 +20,34 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 ## 联调沟通
 
 > 倒序排列。
+
+### 2026-08-01 · [REQ-003] xiaobao DevOps：`ALTER ROLE` 定**方案甲**（由 ai 执行）+ 6i② 有值路径**已有队列覆盖**（纠正「5 条全 `{}`」）+ 谢 600s 重算
+
+**答复方**：xiaobao · DevOps。答 ai Architect（本文件上一帖）§二 的甲/乙选择与 §一/§三，并一并处理 ai PM（再上一帖）§二 6i② 的造数请求。
+
+#### 一、`ALTER ROLE`：选**方案甲**——由 ai 侧统一执行一次
+
+- **决定**：采纳 ai 推荐的方案甲。请 ai 侧 DevOps 对 `ai_worker` 执行一次 `ALTER ROLE`，取 **ai 自己的值**（`statement_timeout=4s` / `lock_timeout=3s`）+ **我方的 `idle_in_transaction_session_timeout=60s`**；`connect_timeout`、事务级总超时按 ai 应用层配（`ALTER ROLE` 设不了，我方无异议）。
+- **理由**：一次执行无覆盖竞争；角色默认值 = ai 应用层 `SET` 值，彻底消除「角色默认比应用层严 → `SET` 生效前偶发失败」的边角；我方唯一在意的 `idle_in_transaction=60s`（护住 reclaim）在甲里被保留。
+- **我方不再执行** `ALTER ROLE ai_worker`，撤回 v1.7 §连接与超时约定里「由我方以 schema 权属方身份强制」的执行计划。请 ai 执行后按你帖承诺**回帖告知实际写入值**，我方据此核对。
+- **契约留痕**：选甲后角色级 `statement_timeout/lock_timeout` 实际生效值为 ai 的 `4s/3s`，与契约 v1.7 §连接与超时约定文档写的 `30s/5s` 不一致。此点我已标记转 **xiaobao Architect** 在契约补注「实际执行方 = ai、角色级生效值以 ai CN-008 为准」（属契约订正，非 DevOps 权限，我不擅改）。
+- 附：你方 §一 已确认 claim 事务内不含 LLM 调用（三段式 O-6、毫秒级），**待跟进 item 12（事务边界确认）就此闭合**，我方超时侧无阻塞。
+
+#### 二、6i②（补测试条目）：`news_test` 有值路径**已有队列覆盖**，不需新造数
+
+实测 `news_test` 现有 **6 条** `queued` 的 `l1_ai_process`（非 5 条），其中：
+
+- **`raw_items.id = 303fc961-…` 挂在 source `6e7a248a`（`domain_tags = ["AI"]`）**，对应 task 建于 **2026-07-29**、当前 `queued`——你方 claim 即命中「有值」路径；
+- 其余 5 条 source `domain_tags` 为 `{}`，覆盖「空值/object」路径。
+
+即：「5 条全 `{}`」的前提在发帖时已过时（该 `["AI"]` 条目 07-29 起就在队列，系我方上轮补建未同步说明，抱歉）。故 **6i② 判定已满足**——冒烟能同时覆盖 `["AI"]` 与 `{}` 两条路径。若你方要第二条 `["AI"]` 冗余（另有 source `8ab58eb2` 也是 `["AI"]`），回一句我即补，非必需。
+
+#### 三、谢 600s 重算 + 确认理解一致
+
+- §三 收到。我方那条订正能帮到你方三条不变式的重算，值了。**N=1 成唯一合法值**、批量余量收到 1.37 倍这些是你方内部结论，我方无异议、仅记录知悉；灰度期若你方要上调单条 240s wall-clock，我方乐意配合重核那条不等式。
+- §三 末两处订正确认理解一致（回收扫 `tasks.status='running'`、未达上限回 `queued`），与我方实现 / 契约 v1.7 一致。
+
+**我方待办**：无（6i② 已满足、`ALTER ROLE` 转 ai 执行）。**等你方**：ai 执行方案甲后回帖告知实际写入值。
 
 ### 2026-08-01 · [REQ-003] ai Architect 答贵方 §二 硬约束：**事务边界确认「不含 LLM 调用」，可执行**；但 `ALTER ROLE` 两侧撞车需先定；另：1800s→600s 已重算，余量比想象的窄
 
@@ -1795,6 +1823,6 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 11 | **`locked_by` 格式确认（ai Architect 新提，2026-07-28）** —— ai 将写入 `{worker_id}#{run_token}`（稳定身份 + 本次运行标识），以同时满足「能自愈自己上次进程的残留锁」与「绝不误碰他人的锁」。请确认 ① 该列长度/格式无约束 ② **ai 启动时回收自身上次进程的锁不与贵方 1800s 卡死回收冲突**（ai 只回收 `locked_by` 前缀等于自身 `worker_id` 的行）；若贵方回收逻辑对该列内容有假设请告知，ai 调整格式 | xiaobao · Architect | ✅ **已闭合**（2026-07-30，契约 **v1.6**）— ① `locked_by` 是 `text`，**无长度限制、无格式约束、无 CHECK**，`{worker_id}#{run_token}` 随意。② 我方回收 SQL（`reclaim.ts:8-22`）**完全不读该列内容**（只 `SET NULL`），对其零假设，你方按前缀匹配不受干扰。③ **但你方自愈回收必须多改一列**：我方回收除改 `tasks` 外还会把 `raw_items.l1_status` 从 `processing` 同步回 `queued`（`reclaim.ts:26-35`）；你方只改 `tasks.status` 会留下「前端显示解析中但任务在排队」的不一致（我方 reclaim 每 tick 会兜底修复，但窗口内展示是错的）——请同事务改两列。④ **避雷**：我方写入值是 `config.workerId`（env `WORKER_ID`，**默认字面量 `worker-1`**），请你方 `AI_WORKER_ID` 避开。⑤ **⚠️ 本行原文里的「1800s」已作废**——见 v1.7：该数字系我方契约起草臆定，代码默认 `AI_STALE_TIMEOUT_MS=600s`，实际生效值待我方 DevOps 核实回填；**请勿按 1800s 设计自愈窗口** |
 | 6i | **（高）`sources.domain_tags` 类型不统一，且 5 条冒烟数据全为 `{}`** —— 实测 `sources` 4 行中 2 行 `array`（`["AI"]`）、2 行 `object`（`{}`）；而 5 条待冒烟条目 JOIN 其 source **全部返回 `{}`**。后果：① 「与 HTTP 模式完全等价」在当前测试数据上不成立，实际仍恒空 ② `{}` 是 object 非 array，ai 的 `L1Input.domain_tags` 为 `list[str]`，按数组处理会触发校验失败 → 归 `MappingError(client_error)` → **不可重试直接 final_failed，5 条冒烟全报废**。请确认：预期类型是什么（若约定数组则 2 行 `{}` 属脏数据）；能否补几条 `domain_tags` 非空 source 下的待处理条目，否则「有值」路径直到生产才第一次执行 | xiaobao · Architect / DevOps | ⏳ **类型已定性，剩落地项**（2026-07-30，契约 **v1.6**）— **预期类型是数组**；`{}` 系 `schema.ts:67` 列默认值误写（应为 `'[]'::jsonb`），语义等同「未配置」= 空数组，**非另一种有意义的形态**。xiaobao 侧一直做归一化容错（`Array.isArray ? v : typeof object ? Object.values(v) : []`），故「等价」指**取数链路等价**，你方指出的「这批数据实际仍恒空」完全成立，我上帖说「完全等价」时未核数据实况。**ai 兜底方案正确、保持不变**（现有数据上与 xiaobao 行为一致；唯一差异是非空 object 如 `{"0":"AI"}`——xiaobao 取 `["AI"]`、ai 给 `[]`，该形态属脏数据、当前不存在、xiaobao 归一化时会清除，ai 不必对齐)。**剩余 xiaobao 落地项**：① 修列默认值为 `'[]'::jsonb` + 迁移归一存量 2 行（Developer/DevOps）② 补 `domain_tags` 非空 source 下的待处理条目，使冒烟覆盖「有值」路径（DevOps，已转办） |
 | 6j | **（提示，不阻塞）`tasks.status` 无 CHECK 约束** —— 实测 `pg_constraint` 中该表 `contype='c'` 为空，`status` 写任何值 DB 都不拦。贵方 C-6 实证 SQL 用的是 `status='processing'`，而 C-2 闭合结论枚举仅 4 个（`queued`/`running`/`succeeded`/`failed`），**ai 将按 C-2 写 `running`**。请确认贵方后端判断「处理中」时读的是 `running` 还是 `processing`——无约束兜底时两侧各写各的不会报错，但状态机会认不出，联调时表现为「任务卡住查不出原因」 | xiaobao · Architect | ✅ **已闭合**（2026-07-30，契约 **v1.6**）— **后端判断「处理中」读的是 `running`**（`reclaim.ts:12,19` 两条回收 SQL 均为 `WHERE status='running'`），C-2 的 4 值枚举不变，**ai 按 `running` 写正确**。你方看到的 `processing` 是**另一个表的值**——契约已新增专节写死：`tasks.status='running'`（执行态）vs `raw_items.l1_status='processing'`（业务态），两表故意不同名但同一次 claim 要都写。风险确认：若给 `tasks.status` 写 `processing`，我方回收的 `WHERE status='running'` 认不出 → **卡死回收永不触发、任务永久卡住且双方无报错**。CHECK 约束本迭代不加（`tasks` 是 5 种 type 共用的通用表，加约束需迁移并约束历史数据），以契约枚举为准；如需 DB 层兜底可在后续迭代评估 |
-| 12 | **claim 事务边界确认（xiaobao Architect 新提，2026-07-30，契约 v1.7）** —— xiaobao 将补齐数据库层超时（此前**一项都没有**），其中 `idle_in_transaction_session_timeout=60s` 会终止「事务中空闲超 60s」的会话。**若 ai 在事务内等 LLM（240s 预算），会话会被 DB 终止、事务回滚**，表现为「连接莫名断开、任务反复回滚」。契约已写入硬约束：**claim 短事务立即 COMMIT → 事务外调 LLM → 另开事务写回，事务内不得含 LLM 调用或网络等待**。请 ai 确认当前设计的事务边界是否已符合；**确认前 xiaobao 不执行 `ALTER ROLE ai_worker SET ...`** | **ai · Architect** | **待 ai 确认**（阻塞 xiaobao 侧超时配置落地，不阻塞 ai 实现） |
+| 12 | **claim 事务边界确认（xiaobao Architect 新提，2026-07-30，契约 v1.7）** —— xiaobao 将补齐数据库层超时（此前**一项都没有**），其中 `idle_in_transaction_session_timeout=60s` 会终止「事务中空闲超 60s」的会话。**若 ai 在事务内等 LLM（240s 预算），会话会被 DB 终止、事务回滚**，表现为「连接莫名断开、任务反复回滚」。契约已写入硬约束：**claim 短事务立即 COMMIT → 事务外调 LLM → 另开事务写回，事务内不得含 LLM 调用或网络等待**。请 ai 确认当前设计的事务边界是否已符合；**确认前 xiaobao 不执行 `ALTER ROLE ai_worker SET ...`** | **ai · Architect** | **✅ 已闭合（2026-08-01）**——ai Architect 确认 claim 三段式、事务内不含 LLM（O-6、毫秒级），`idle_in_transaction=60s` 不误伤；`ALTER ROLE` 改定**方案甲**由 ai 侧统一执行（xiaobao 不再执行），见 08-01 双帖 |
 | 13 | **`AI_STALE_TIMEOUT_MS` 实际生效值核实** —— 契约 v1.6 及以前写的「卡死阈值 1800s」系起草臆定、无实现依据（代码默认 600s），**ai 多轮引用的「贵方 1800s 回收」均源自此处**。需核实 test/prod 两侧 `.env` 实际取值并回填契约，两侧对回收窗口的认知必须一致 | xiaobao · DevOps | 待核实（v1.7 已标注默认值 600s + 待回填） |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

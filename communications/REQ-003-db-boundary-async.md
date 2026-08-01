@@ -21,6 +21,16 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] xiaobao Developer：契约 v1.9 我方三项配套已全部落码（needs_context 列 / score_total 轮询补算 / 手动重试放开 `l1_ai_process`）
+
+**答复方**：xiaobao · Developer。原计划绑 ai v0.2 联调启动落地，Owner 指令提前完成，联调启动时我方无待做项。
+
+1. **needs_context 列（Q-1）**：schema + 幂等迁移脚本已就绪并在隔离库验证（`boolean` 可空）；**test/prod 落库随我方下次部署执行，落库后另行回帖销「列迁移待落地」前置**——在那之前贵方写回该列仍会失败，前置核对项维持有效。
+2. **score_total 轮询补算**：已挂 worker 周期 tick（与卡死回收同节奏 30s），条件与公式严格按契约 v1.9（`calcScoreTotal` 应用层单一真源）；贵方写回 `completed` + `score_dimensions` 后 ≤30s 内补算。维度结构残缺的行会跳过并告警（不崩 tick、不写错值），供贵方知悉：**写回的 `score_dimensions` 须含四维完整 `score` 数值**，否则该条 `score_total` 恒空、排序走 `COALESCE` 兜底。
+3. **手动重试接口**：`l1_ai_process` 失败任务现可由我方管理端手动重试（建同类型新任务 + 复位 `raw_items.l1_status='queued'`），贵方按正常 claim 流程领取即可，无需感知来源。
+
+验证：TDD 新增 6 例单测全绿 + 全量 71/71 + tsc 0 错误。**等贵方**：无。
+
 ### 2026-08-01 · [REQ-003] ai PM：三项拍板全部承接（Q-1 **认领一处我方误读**）+ 6i 闭合已连带订正我方一处口径
 
 **答复方**：ai · PM。三项均已落地为 **CN-009**（PRD 侧），并连带订正我方一处因 6i 闭合而过期的表述。

@@ -1,7 +1,7 @@
 # 契约：news-l1-db（新闻 L1 数据库边界契约）
 
 - 契约 id：`news-l1-db`
-- 版本：v1.7（2026-07-30 Architect：**新增 §连接与超时约定**——claim 事务与处理必须分离的硬约束（事务内禁止 LLM 调用）+ 四项超时取值（`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / 建连 10s）+ 以 `ALTER ROLE ai_worker SET` 在数据库层强制、ai 侧零配置；**订正 §卡死回收机制三处错误**——扫描的是 `tasks.status='running'` 非 `processing`、未达上限回收到 `queued` 非 `retryable_failed`、**阈值默认 600s 而非契约此前写的 1800s（该数字无实现依据，ai 多轮引用的 1800s 源自此处，实际生效值 DevOps 已核实回填：test/prod `server/.env` 均 `600000`（600s），见 §卡死阈值）**。方案详见 xiaobao `docs/progress/ad-hoc/2026-07-30-spike-db-timeout-config.md`）。v1.6（2026-07-30 Architect：① `locked_by` 明确无格式约束、xiaobao 回收不读其内容、xiaobao 侧写入值为 `WORKER_ID`（默认 `worker-1`）请 ai 避开；② **新增「处理中」两表字面量差异专节**——`tasks.status='running'` vs `raw_items.l1_status='processing'`，并说明 `tasks` 无 CHECK 约束、写错 `processing` 会导致卡死回收永不触发；③ **新增 ai 自愈回收必须同步 `raw_items.l1_status` 的要求**，否则留下「前端显示解析中但任务在排队」的不一致；④ `sources.domain_tags` 类型定性——预期数组，`{}` 系 `schema.ts:67` 默认值误写（应为 `'[]'`）、语义等同未配置，附两侧归一化行为与数据实况。见 ai 2026-07-28 两帖）。v1.5（2026-07-28 Architect 答复 C-11~C-14：**撤回 v1.3 关于 `l0_label` 的错误结论**——`L1Input.domain_tags` 真源是 `sources.domain_tags`（源级静态标签，非 L0 产物），`l0_label` 是处理决策标记，两者语义无关；补 `l0_label` 完整取值域枚举；§sources 补 `domain_tags`/`attention_level` 行（权限待 GRANT）；明确 `priority` 方向为「数值大 = 优先」；退避越界取末值 + `max_attempts` 以列为准并登记 xiaobao 侧待订正的硬编码；标注 `source_item_url` 不保证协议前缀；登记 `processed_news.raw_item_id` 唯一约束为 ai 幂等前提。见 C-11/C-12/C-13/C-14）。v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
+- 版本：v1.8（2026-08-01 Architect：① **`ALTER ROLE` 执行方改为 ai（方案甲）**——角色级 `statement_timeout`/`lock_timeout` 实际生效值为 ai 的 `4s`/`3s`（比 v1.7 文档写的 30s/5s 更严，以 ai CN-008 为准），`idle_in_transaction_session_timeout=60s` 保留 xiaobao 值并**定性为跨项目约定上限**（ai 可更严不可放宽，放宽须先改契约）；xiaobao 撤回自行执行计划。② **更正 v1.7 一处不准确表述**——`ALTER ROLE` 对 `USERSET` 参数**不是强制手段**（应用层 `SET` 随时可覆盖），其真实价值是「忘记 SET 时的兜底默认」。③ **`AI_STALE_TIMEOUT_MS` 升格为跨项目契约参数**——它约束 ai 的批量上限不变式（当前 600s 下余量仅 1.37 倍、`N=1` 唯一合法、单条预算上调空间仅 337s），任一侧变更前须先改契约并通知对方。见 2026-08-01 三帖）。v1.7（2026-07-30 Architect：**新增 §连接与超时约定**——claim 事务与处理必须分离的硬约束（事务内禁止 LLM 调用）+ 四项超时取值（`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / 建连 10s）+ 以 `ALTER ROLE ai_worker SET` 在数据库层强制、ai 侧零配置；**订正 §卡死回收机制三处错误**——扫描的是 `tasks.status='running'` 非 `processing`、未达上限回收到 `queued` 非 `retryable_failed`、**阈值默认 600s 而非契约此前写的 1800s（该数字无实现依据，ai 多轮引用的 1800s 源自此处，实际生效值 DevOps 已核实回填：test/prod `server/.env` 均 `600000`（600s），见 §卡死阈值）**。方案详见 xiaobao `docs/progress/ad-hoc/2026-07-30-spike-db-timeout-config.md`）。v1.6（2026-07-30 Architect：① `locked_by` 明确无格式约束、xiaobao 回收不读其内容、xiaobao 侧写入值为 `WORKER_ID`（默认 `worker-1`）请 ai 避开；② **新增「处理中」两表字面量差异专节**——`tasks.status='running'` vs `raw_items.l1_status='processing'`，并说明 `tasks` 无 CHECK 约束、写错 `processing` 会导致卡死回收永不触发；③ **新增 ai 自愈回收必须同步 `raw_items.l1_status` 的要求**，否则留下「前端显示解析中但任务在排队」的不一致；④ `sources.domain_tags` 类型定性——预期数组，`{}` 系 `schema.ts:67` 默认值误写（应为 `'[]'`）、语义等同未配置，附两侧归一化行为与数据实况。见 ai 2026-07-28 两帖）。v1.5（2026-07-28 Architect 答复 C-11~C-14：**撤回 v1.3 关于 `l0_label` 的错误结论**——`L1Input.domain_tags` 真源是 `sources.domain_tags`（源级静态标签，非 L0 产物），`l0_label` 是处理决策标记，两者语义无关；补 `l0_label` 完整取值域枚举；§sources 补 `domain_tags`/`attention_level` 行（权限待 GRANT）；明确 `priority` 方向为「数值大 = 优先」；退避越界取末值 + `max_attempts` 以列为准并登记 xiaobao 侧待订正的硬编码；标注 `source_item_url` 不保证协议前缀；登记 `processed_news.raw_item_id` 唯一约束为 ai 幂等前提。见 C-11/C-12/C-13/C-14）。v1.4（2026-07-27 权限矩阵照 DevOps 已执行 GRANT 补齐：`raw_items` SELECT + `source_item_url`/`l0_label`、`tasks` UPDATE + `run_after`，test + prod 双库对称，见 STATUS/沟通文档 GRANT 回帖）。v1.3（2026-07-27 Architect 事实订正：删除不存在的 `tasks.metadata` 列并补齐 `raw_item_id`/`run_after`/`max_attempts`/`priority`、补 `tasks.status` 枚举与时点对应表、claim 规则改为以 tasks 为准并补 `run_after` 退避条件、明确 `processed_news` 为「xiaobao 占位 INSERT + ai UPDATE」及 `id` 由 DB 生成、补 `published_at` 写入要求、标注 `score_total` 在 database 模式无触发点，见 C-2/C-3/C-4/C-5/C-8/C-9。权限矩阵变更已随 v1.4 落文档。v1.2 2026-07-27 订正 `tags_v2` 第五类笔误 `sentiment`→`processing` 对齐 HTTP 契约 + 明确 `language` 取值固定 `'zh'`，见 C-10 / C-7。v1.1 2026-07-25 订正 `score_total` 归属 + 合并 `l1_status` 枚举重复行，见 O-1 / O-5）
 - 状态：生效中（ai 已承接 REQ-003，2026-07-25）
 - schema 权属方：`xiaobao`（拥有建表改表、角色管理、触发器创建权限）
 - worker 方：`ai`（AI 处理中枢 / Agent Hub）
@@ -272,6 +272,22 @@ xiaobao 的 1800s 卡死回收除了改 `tasks`，还有第三条 UPDATE（`recl
 
 **卡死阈值**：由 `AI_STALE_TIMEOUT_MS` 配置，**代码默认 600000ms（600 秒 / 10 分钟）**（`config.ts:95`）；test 与 prod 的 `server/.env` 均显式设为 `600000`（DevOps 已核实，与默认同值）。
 
+> ### ⚠️ 该阈值是跨项目契约参数，xiaobao 不得单方修改（v1.8 升格）
+>
+> 它形式上是 xiaobao 的一个 env，实质上**约束着 ai 侧的批量上限与单条处理预算**。ai 的不变式为：
+>
+> ```
+> N × (单条 wall-clock 预算 + DB 操作上界) < 阈值 × 0.6
+> ```
+>
+> 按当前 600s 代入：`1 × (240 + 23) = 263s < 360s`，**余量仅 1.37 倍**；`N = 1` 是唯一合法值（`N = 2` 即 526s > 360s 越界），单条预算的上调空间只剩 `360 − 23 = 337s`。
+>
+> **后果对称**：
+> - **xiaobao 调小该值** → ai 的不变式可能立即失效，正在处理的任务被误回收并重复处理，且 ai 侧不会收到任何信号；
+> - **ai 要提高并发（N > 1）或上调单条预算超过 337s** → 必须先请 xiaobao 调大该阈值，不能单方进行。
+>
+> **纪律**：任一侧变更前**先改本契约并通知对方**，与表结构、状态枚举同级。此前该值被当作 xiaobao 内部配置，是 v1.6 及以前「阈值 1800s」错误长期未被发现的原因之一——ai 的三条不变式全部建立在那个不存在的数字上。
+
 > ⚠️ v1.6 及以前契约写的「30 分钟（1800 秒）」**无实现依据**，系起草时臆定；ai 侧多轮沟通中引用的 1800s 均源自此处。test / prod 的**实际生效值已由 xiaobao DevOps 核实并回填（2026-08-01，直连部署机 `zijie`/`news.huiyiyou.cloud` grep 两库 `server/.env`）：均显式设 `AI_STALE_TIMEOUT_MS=600000`（600s / 10 分钟），与代码默认一致，全场无 1800s。** 两侧对回收窗口的认知必须一致，否则 ai 的自愈逻辑会按错误窗口设计。
 
 ## 连接与超时约定（v1.7 新增）
@@ -298,16 +314,27 @@ xiaobao 的 1800s 卡死回收除了改 `tasks`，还有第三条 UPDATE（`recl
 ### 施加方式
 
 - **xiaobao 侧**：连接池 `options` 参数下发（`-c statement_timeout=... -c idle_in_transaction_session_timeout=... -c lock_timeout=...`）+ `connectionTimeoutMillis`。
-- **ai_worker 侧**：由 xiaobao 以 schema 权属方身份在**数据库层**强制，ai 侧零配置：
+- **ai_worker 侧（v1.8 订正：执行方改为 ai，取值以 ai 为准）**：经两侧协商定**方案甲**——由 **ai 侧统一执行一次** `ALTER ROLE`，避免两侧互相覆盖：
 
 ```sql
-ALTER ROLE ai_worker SET statement_timeout = '30s';
-ALTER ROLE ai_worker SET idle_in_transaction_session_timeout = '60s';
-ALTER ROLE ai_worker SET lock_timeout = '5s';
+-- 执行方：ai 侧 DevOps（xiaobao 不再执行）
+ALTER ROLE ai_worker SET statement_timeout = '4s';               -- ai 值，比 xiaobao 建议的 30s 更严
+ALTER ROLE ai_worker SET idle_in_transaction_session_timeout = '60s';  -- ★ xiaobao 值，护 reclaim，见下
+ALTER ROLE ai_worker SET lock_timeout = '3s';                    -- ai 值，比 xiaobao 建议的 5s 更严
 ```
 
-> 与 GRANT 同属权属方的边界控制，新增 ai 实例 / 换连接库 / 改代码都不会绕过。`ALTER ROLE ... SET` 对**新建会话**生效，已有连接需重连。
-> **执行前提**：须先与 ai 侧确认其 claim 事务边界符合上述硬约束。若 ai 当前实现是「事务内调 LLM」，直接执行会表现为「连接莫名断开、任务反复回滚」，排查成本高。
+| 参数 | 角色级实际生效值 | 说明 |
+|------|-----------------|------|
+| `statement_timeout` | **4s**（ai 值，以 ai CN-008 为准） | 比本文 §超时取值表的 30s 更严；ai 的语句均为单行 claim / 写回，自评 4s 足够 |
+| `lock_timeout` | **3s**（ai 值） | 同上 |
+| `idle_in_transaction_session_timeout` | **60s**（xiaobao 值，保留） | **跨项目约定项，见下方约束** |
+| 建连超时 / 事务级总超时 | ai 应用层配置 | `ALTER ROLE` 设不了（前者是连接串参数，后者 PG 无此设置） |
+
+> **`idle_in_transaction_session_timeout = 60s` 是跨项目约定，语义为「上限」**：ai 可以设得**更严**（更小），**不可放宽**（更大）。它保护的是 xiaobao 的 reclaim 不被 ai 长事务持锁阻塞——放宽即削弱该保护。**如需放宽，先改本契约并通知 xiaobao**。其余两项（`statement_timeout` / `lock_timeout`）只作用于 ai 自己的语句，ai 自主决定，改动无需通知。
+
+> **v1.8 更正一处 v1.7 的不准确表述**：v1.7 称此举「新增 ai 实例 / 换连接库 / 改代码都不会绕过」——**不准确**。这三项都是 `USERSET` 参数，应用层 `SET` 随时可覆盖角色默认值，`ALTER ROLE` 从来不是强制手段，其真实价值是**「应用层忘记 SET 时的兜底默认」**。方案甲下由 ai 设置自己的值，兜底效果相同（且角色默认值与应用层 `SET` 值一致，消除了「角色默认比应用层严 → `SET` 生效前偶发失败」的边角）。真正的强制手段只有 GRANT / REVOKE 一类权限控制。
+
+> **执行前提（已满足）**：须先确认 ai 的 claim 事务边界符合上述硬约束。ai Architect 已于 2026-08-01 确认「事务内不含 LLM 调用」，前提解除。
 
 - **例外**：人工执行的 SQL 迁移（`psql` 直连，不走连接池）不受 `statement_timeout` 限制——迁移可能长时间运行，这是有意的。
 

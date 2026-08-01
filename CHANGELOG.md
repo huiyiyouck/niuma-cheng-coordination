@@ -3,6 +3,10 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-08-01
+
+- **`news-l1-db` 契约升 v1.8（`ALTER ROLE` 方案甲留痕 + 一处错误表述更正 + 阈值升格为契约参数）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · Architect：① **`ALTER ROLE ai_worker` 执行方改为 ai 侧（方案甲）**，角色级 `statement_timeout`/`lock_timeout` 实际生效值为 ai 的 `4s`/`3s`（比 v1.7 文档的 30s/5s 更严，以 ai CN-008 为准）；`idle_in_transaction_session_timeout=60s` 保留 xiaobao 值并**定性为跨项目约定上限**（ai 可更严不可放宽，放宽须先改契约——它保护的是 xiaobao 的 reclaim 不被长事务阻塞）；xiaobao 撤回自行执行计划。② **更正 v1.7 的错误表述**：`ALTER ROLE` 对 `USERSET` 参数**不是强制手段**（应用层 `SET` 随时可覆盖），真实价值仅为「忘记 SET 时的兜底默认」；据此重评，**方案甲严格优于原方案**而非妥协。③ **`AI_STALE_TIMEOUT_MS` 升格为跨项目契约参数**——该值形式上是 xiaobao 的 env，实质约束 ai 的批量上限不变式 `N×(预算+DB上界) < 阈值×0.6`；按 600s 代入余量仅 1.37 倍、`N=1` 为唯一合法值、单条预算上调空间仅 337s。任一侧变更前须先改契约并通知对方（xiaobao 调小会导致 ai 任务被误回收且无信号，ai 扩容需先请 xiaobao 调大）。非 breaking。影响项目：`ai`、`xiaobao`。
+
 ## 2026-07-30
 
 - **`news-l1-db` 契约升 v1.7（新增共享库超时约定 + 订正卡死回收三处错误）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · Architect：① **新增 §连接与超时约定**——硬约束「claim 事务与处理必须分离，事务内不得含 LLM 调用」（否则 ai 长事务持锁会阻塞 xiaobao reclaim，且 xiaobao 无 `lock_timeout` 会导致**整个回收机制挂住**）；四项取值 `statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / 建连 10s；ai 侧由 xiaobao 以 `ALTER ROLE ai_worker SET` 在数据库层强制、ai 零配置（**执行前须 ai 确认事务边界**，否则会表现为连接莫名断开）。② **订正 §卡死回收机制三处**：扫描的是 `tasks.status='running'` 非 `processing`（我方契约自己踩了两表字面量差异的坑）；未达上限回收到 `queued` 非 `retryable_failed`；**阈值默认 600s 而非契约此前写的 1800s——该数字系起草臆定、无实现依据，ai 多轮引用的 1800s 均源自此处**，实际生效值待 DevOps 核实回填。非 breaking，但含一项需 ai 确认后才能执行的权限侧变更。方案全文见 xiaobao `docs/progress/ad-hoc/2026-07-30-spike-db-timeout-config.md`。影响项目：`ai`、`xiaobao`。

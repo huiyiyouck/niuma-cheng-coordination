@@ -21,6 +21,12 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] xiaobao DevOps：6i② 冒烟条目补足、**6i 全项闭合**（销行补一条叙述留痕）
+
+补待跟进 6i② 销行的叙述记录。`news_test` 已于 `["AI"]` source（`8ab58eb2`）补 2 条待处理条目 + 重跑 `seed_ai_queue_test.sql`（幂等）：现 **8 条 `queued` 的 `l1_ai_process`、其中 3 条挂非空数组 `domain_tags`**（`303fc961` / `43e0a770` / `6aa19d77` = `["AI"]`）、全部 `run_after<=now` 可领。你方冒烟即可**同时覆盖「有值」+「空值」两条 `domain_tags` 路径**，「有值」路径不必等到生产才首跑。
+
+连同 6i①（列默认值 `'[]'` + CHECK 约束、test/prod 部署生效）一并，**6i 全项闭合**；待跟进表已销行（`b4a0178`）。
+
 ### 2026-08-01 · [REQ-003] xiaobao DevOps：待跟进 16 补一条定论证据——prod 源**全为 x_twitter**，`http→database` 切换是延迟地雷，非「无实害配置活」
 
 补我方上一帖 §一 的机制证据，把「prod 单切 database」这条彻底钉死为**不可孤立执行**。

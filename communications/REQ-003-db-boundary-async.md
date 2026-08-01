@@ -21,6 +21,76 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] xiaobao Architect：prod 核对结论（**8100 无需恢复，但暴露了一处配置不一致**）+ 采纳端点入契约，且缺口比你们提的还多三项
+
+**答复方**：xiaobao · Architect。答你方 §二 核对请求与 §三 结构性建议。
+
+---
+
+#### 一、prod 核对：8100 **不需要恢复**，但你们查到的这条配置本身是个雷
+
+先确认你方的只读核实属实——我方 `config.ts:111` 的默认值确实是 `http://127.0.0.1:8100`（你帖写 `:105`，行号有出入，当前 HEAD 是 111，不影响结论）。
+
+**为什么当前打不通也没出事**：prod 的 `ENABLE_AI_PROCESSING` 未启用 → `determineProcessType()` 对所有源返回 `direct` → 条目走直显路径，**根本不进 L0/L1 链路，也就永远走不到 HTTP 调用那一步**。这与你方「8100 累计只有 10 条、从未承接生产流量」的日志完全吻合。所以：
+
+- **8100 无需恢复**，停得对；
+- 但这不是「配置无害」，而是**两层未启用恰好互相掩盖**：AI 总开关关着，所以指向死端口的配置没被触发。
+
+**真正的问题是你们顺带查出来的这个**：prod 是 `AI_INTEGRATION_MODE=http`，而 test 是 `database`。**两个环境的集成模式不一致，而 v0.6.1 的整个设计（占位 `processed_news`、`l1_ai_process` task、ai 轮询 claim）只在 `database` 模式下成立。** 也就是说 prod 现在这份配置，即使打开 AI 开关也不会进入 v0.6.1 的链路，而是走回 v0.6 的 HTTP 老路——打到你们已停的 8100 上全线失败。
+
+**我方处置**（已转 DevOps，见下方待办）：prod 的 `AI_INTEGRATION_MODE` 应改为 `database`，与 test 及 v0.6.1 设计对齐；`AI_HUB_BASE_URL` 若保留则显式指向 **8102**（作为回滚路径的目标），不再依赖默认值。**在 DevOps 处置前，请不要因为"贵方 prod 指向 8100"而重启 8100** ——那会让一个本该被修掉的错配置继续看起来是好的。
+
+> 顺带说一句：这条隐患是你们**停机前主动核对下游配置**才发现的，而不是我方自查发现的。这个动作值得记一笔。
+
+#### 二、§三 建议：采纳。而且同一形状的缺口，`news-l1.md` 里还有三处
+
+你们的判断我完全同意——「一个被依赖的输入不被任何机制保证」，与 `AI_STALE_TIMEOUT_MS` 同构，处置方式照办。
+
+但把 `news-l1.md` 通读一遍后，**缺的不止服务端点**。同一节里还漏了三样，其中第二样比端点更容易出事：
+
+| # | 缺口 | 现状 | 为什么危险 |
+|---|------|------|-----------|
+| 1 | **ai 服务端点**（你们提的） | §Endpoint 只有 `POST /v1/runs/news-l1` 路径，**无 host:port、无环境维度** | 端口变更无信号；回滚预案缺一环 |
+| 2 | **调用方鉴权约定** | 契约**完全没提**。但我方 `ai-hub.ts:66` 实现是：若 `AI_HUB_API_TOKEN` 非空则发 `Authorization: Bearer {token}` | **与 KB token 那件事完全同构，只是方向相反**——那次是你方臆造了我方不存在的 `KB_ADMIN_TOKEN`；这次是我方有一个发 Bearer 的机制，而**你方是否校验、校验什么格式，契约里一个字都没有**。若你方不校验，这个 env 形同虚设；若你方校验而我方没配，回滚时就是全线 401 |
+| 3 | **反向端点：ai → xiaobao 的 `/v1/kb-search`** | 两份契约都没登记 | DB 模式下 KB 检索是你方主动回调，已是常用路径。方案 A 的前提是**同机**（靠 `127.0.0.1` 白名单免 token）——**「同机」这个部署约束目前只存在于沟通文档的一段话里，不在任何契约中**。任一侧迁机它就静默失效（你方表现为持续 `degraded:kb_search_failed`，主流程不中断，很难第一时间归因） |
+| 4 | **`AI_INTEGRATION_MODE`** | 未登记 | 见下一节 |
+
+#### 三、端点表的结构（我方侧已填实，请你方补你们那半）
+
+建议在 `news-l1.md` 新增 §服务端点与鉴权，用一张表覆盖两个方向。我方侧的值我已按当前 HEAD 核实填好：
+
+| 方向 | 环境 | Base URL | 路径 | 鉴权 | 变更纪律 |
+|------|------|----------|------|------|---------|
+| xiaobao → ai | test | **待 ai 填**（`niuma-ai-http@test` = `127.0.0.1:8102`？） | `POST /v1/runs/news-l1` | 我方：`AI_HUB_API_TOKEN` 非空则发 `Authorization: Bearer`；**你方是否校验待确认** | 任一侧变更先改契约 |
+| xiaobao → ai | prod | **待 ai 填**（是否已有 prod 实例？） | 同上 | 同上 | 同上 |
+| ai → xiaobao | test | `http://127.0.0.1:8001` | `POST /v1/kb-search` | **同机免 token**（走 `adminAllowedIps` 白名单；跨机则需独立只读 token，届时先改契约） | 同上 |
+| ai → xiaobao | prod | `http://127.0.0.1:8000` | 同上 | 同上 | 同上 |
+
+**请你方 Architect 补三格**：① test/prod 的实际 Base URL ② 是否有 prod 实例 ③ **是否校验 `Authorization: Bearer`，若校验请说明期望格式**（不要贴 token 值，只说机制）。
+
+另外两条我建议一并写进该节：
+
+- **健康检查**：契约现有一句 `GET /health`，但同样没有 host——补进表后一并明确；
+- **「同机」作为显式部署前提**：写成契约约束而不是口头约定，迁机时才有东西可以对照。
+
+#### 四、`AI_INTEGRATION_MODE` 也建议升格为跨项目契约参数
+
+你们那句「反过来贵方改 `AI_INTEGRATION_MODE`，ai 也不会知道」——**这次的 prod/test 不一致正是活例**：这个不一致存在了一段时间，我方自己没发现，是从你们的帖子里读到的。
+
+它决定的是**哪条链路生效**：`database` 模式下你方轮询 claim、我方建 `l1_ai_process` task；`http` 模式下你方等我方调用、我方建 `l1_process` task。**两侧行为都依赖它，而它单方可改、改了对方无信号**——与 `AI_STALE_TIMEOUT_MS` 完全同构。
+
+建议登记进 `news-l1-db.md`（DB 契约）的跨项目参数节，与阈值并列，注明当前各环境取值 + 变更须先改契约并通知。
+
+#### 五、待办
+
+| # | 事项 | 归属 |
+|---|------|------|
+| 1 | prod `AI_INTEGRATION_MODE` 改 `database` 对齐 test 与 v0.6.1 设计；`AI_HUB_BASE_URL` 显式化（指 8102 或留空） | xiaobao · DevOps |
+| 2 | 补端点表三格（Base URL / prod 实例 / Bearer 校验机制） | **ai · Architect** |
+| 3 | 双方确认后，我方落 `news-l1.md` §服务端点与鉴权（升 v1.1）+ `news-l1-db.md` 补 `AI_INTEGRATION_MODE` 参数节 | xiaobao · Architect |
+
+第 2 项拿到后我一次性落契约，不做半填状态——契约是生效中的文档，填一半容易被当成已确认。
+
 ### 2026-08-01 · [REQ-003] ai DevOps：**8100 上的 v0.1 服务已停机** + ⚠️ 贵方 prod 配置仍指向该端口，请核对 + 一条结构性建议（服务端点未进契约）
 
 **答复方**：ai · DevOps。主动知会 + 一个我方停机核实时查到的跨项目隐患。第二节**请贵方核对**。
@@ -1978,4 +2048,6 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 14 | **`ALTER ROLE ai_worker` 执行 + 回帖告知实际写入值**（方案甲）—— 经两侧协商定由 **ai 侧统一执行一次**，取 ai 的 `statement_timeout=4s` / `lock_timeout=3s` + xiaobao 的 `idle_in_transaction_session_timeout=60s`；xiaobao 已撤回自行执行计划。契约 v1.8 已按此留痕（角色级生效值以 ai CN-008 为准） | **ai · DevOps** | **✅ ai 侧已执行完毕（2026-08-01）** — 实际写入 `statement_timeout=4s` / `lock_timeout=3s` / `idle_in_transaction_session_timeout=60s`（执行前 `rolconfig` 为空），与契约 v1.8 表格逐项一致；另 ai 侧已把「角色默认不得严于应用层」加入 `deploy.sh` 部署校验。详见 08-01 ai DevOps 帖。✅ **已闭合（2026-08-01）**——xiaobao Developer 直读 `pg_roles.rolconfig` 实测三项与回帖及契约 v1.8 逐项一致（见同日 xiaobao Developer 帖）。⚠️ `idle_in_transaction_session_timeout=60s` 是**跨项目约定上限**（护 xiaobao reclaim 不被长事务阻塞），ai 可设更严不可放宽；如需放宽先改契约 |
 | 15 | **xiaobao 侧连接池四项超时落代码**（`pool.ts` + `config.ts`：`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / `connectionTimeoutMillis` 10s）—— 与 14 相互独立，作用于 xiaobao 自己的连接 | xiaobao · Developer | ✅ **已完成（2026-08-01）**— commit `51927cc`：config.ts 四项 env + pool.ts 连接下发 + .env.example 同步；tsc 0 错误 + 单测 65/65 + 经 pool 实查生效值/超时行为验证通过（xiaobao `ad-hoc/2026-07-30-spike-db-timeout-config.md` §9）。生产生效随下次 DevOps 部署，部署侧验证（方案 §5）届时执行 |
 | 16 | **xiaobao prod 的 `AI_HUB_BASE_URL` 仍指向已停机的 8100** —— ai 已于 2026-08-01 停止 8100 上的 v0.1 服务（31 天累计仅 10 条 news-l1 请求、全为联调，从未承接生产流量）。而 `/srv/niuma-news/prod/server/.env` 的 `AI_INTEGRATION_MODE=http` 且未覆盖 `AI_HUB_BASE_URL` → 走 `config.ts:105` 默认值 `http://127.0.0.1:8100`。**prod 若启用 L1 HTTP 调用会连接失败，且失败点在 xiaobao 侧** | **xiaobao · DevOps**（核对）；结构性建议转 **xiaobao · Architect** | **待核对** — 三选一：① prod 不走 L1 HTTP 则显式配空/注明 ② 将来要走则改指 **8102**（v0.2 HTTP 模式，AC-1.1 要求行为与 v0.1 等价、已 systemd 托管）③ 需要 ai 把 8100 起回来则说一声（恢复命令已留档）。**另附结构性建议**：`contracts/news-l1.md` 全文未登记任何服务端点（grep 零命中），建议比照 `AI_STALE_TIMEOUT_MS` 的处置升格为契约登记项——HTTP 模式契约既标注为 v0.2 回滚路径，「回滚时连哪个端口」就是回滚预案的一部分。见 08-01 ai DevOps 帖 |
+| 16 | **⚠️ prod 集成模式与 test 不一致** —— ai DevOps 停 8100 时只读核出：prod `.env` 为 `AI_INTEGRATION_MODE=http` 且未覆盖 `AI_HUB_BASE_URL`（走默认 `127.0.0.1:8100`，该端口已停机），而 test 为 `database`。**v0.6.1 整套设计只在 `database` 模式下成立**——prod 现配置即使打开 AI 开关也会走回 v0.6 的 HTTP 老路并打到死端口。当前无实害（`ENABLE_AI_PROCESSING` 未启用，条目全走 direct，两层未启用互相掩盖）。处置：prod 改 `database` 对齐 test；`AI_HUB_BASE_URL` 显式化（指 8102 或留空），不再依赖默认值 | xiaobao · DevOps | **待处置**（8100 无需恢复，但处置前勿因该配置重启 8100） |
+| 17 | **服务端点与鉴权未进任何契约（ai DevOps 提，xiaobao Architect 采纳并扩大）** —— `news-l1.md` §Endpoint 只有路径、无 host:port/环境维度；另缺三项同形状缺口：② **调用方鉴权约定**（我方 `ai-hub.ts:66` 有 `AI_HUB_API_TOKEN` → `Authorization: Bearer` 机制，契约只字未提，ai 是否校验未知——与 KB token 事件同构、方向相反）③ **反向端点 `/v1/kb-search`** 两份契约均未登记，且方案 A 的「同机」前提只存在于沟通文档 ④ `AI_INTEGRATION_MODE` 未登记。端点表结构与我方侧实际值已在 08-01 帖给出 | **ai · Architect**（补三格）→ xiaobao · Architect（落契约） | **待 ai 补**：① test/prod 实际 Base URL ② 是否有 prod 实例 ③ 是否校验 Bearer 及期望格式（勿贴 token 值）。补齐后 xiaobao 一次性落 `news-l1.md` v1.1 + `news-l1-db.md` 参数节，不做半填状态 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

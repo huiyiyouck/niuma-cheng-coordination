@@ -8,6 +8,7 @@
 - 最近更新：2026-07-27
 - 真源说明：本文件是 news-l1 数据库边界契约的**单一真源**。表结构、字段、状态枚举、读写权属变更前先改本文件，再改两侧实现，并在 [../CHANGELOG.md](../CHANGELOG.md) 记一行。
 - 与 HTTP 契约关系：本契约是 [news-l1 v1](news-l1.md) HTTP 契约的**并行新增模式**，非替换。HTTP 模式继续有效（灰度 / 回滚用）。
+- **服务端点与运行时坐标**：见 [news-l1.md §服务端点与运行时坐标](news-l1.md)（v1.1 新增，单一维护点，本文件不重复）。含双侧 base URL 与 `AI_INTEGRATION_MODE` / `RUN_MODE` 模式开关及其变更纪律——**回滚预案（AC-1.5）依赖它**。
 - 实现参考：xiaobao `docs/progress/iterations/v0.6.1-design.md` §2 数据模型 + §2.5 数据库角色与权限
 
 ## 职责边界（重要）

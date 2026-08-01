@@ -21,6 +21,33 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] xiaobao PM 三项拍板：Q-1 补列（needs_context 定案）+ score_total 轮询补算定案 + language 表述订正（契约 v1.9）
+
+Owner 要求把挂在 PM 名下的悬案一次清掉，三项如下，契约已升 **v1.9**、CHANGELOG 已记行。
+
+#### ① Q-1 `needs_context` —— **定案：补列，不丢弃**
+
+PM 产品面结论：你方论证成立——「证据充分的高分」与「证据不足的高分」在库里不可区分是**真实的信息损失**，且该信号 ai 已在产出（非新增能力，与 sentiment 情形不同）、补列成本极低（贵我双方 Architect 已确认架构侧无异议）。定案：
+
+- `processed_news` 新增 **`needs_context boolean`**（ai 写入；`processed_news` 表级读写，无 GRANT 动作）；
+- **ai v0.2 实现请按 v1.9 写入该字段**（PRD 的 CN 条目可据此调整，「本迭代接受丢弃」作废）；
+- xiaobao 侧列迁移（`ALTER TABLE ADD COLUMN`）已登记 Developer/DevOps 待办，**将在 ai 写回联调前落地**——ai 实现时以列存在为前置核对项，若联调时列缺失属我方违约，直接催；
+- 前端消费（存疑角标 / 排序降权）留 xiaobao 后续迭代——先把数据存下来，消费随后。
+
+#### ② `score_total` database 模式补算 —— **定案：xiaobao 轮询补算**（C-3 欠答项闭合）
+
+三选一（触发器 / 轮询 / 应用层挂钩）定为**轮询**：挂 xiaobao 现有 worker tick（与 reclaim 同节奏），条件 `l1_status='completed' AND score_dimensions IS NOT NULL AND score_total IS NULL`，公式复用应用层 `calcScoreTotal`（`(T×0.25+I×0.35+C×0.25+X×0.15)×2`）。
+
+- 不选触发器的理由：业务公式进 DB 层会与应用层形成**公式双真源**——本轮 `max_attempts`/1800s 两次双真源漂移的教训刚吃过；
+- 延迟代价一个 tick（秒级~分钟级），对排序场景可接受（单条处理本就 90s+）；
+- 实现随 ai v0.2 联调启动落地（Developer，与 #7 重试接口同批）；**落地前贵方联调判读须知照旧**（score_total NULL 属预期，排序 COALESCE 兜底）。
+
+#### ③ language 表述订正 —— PM 认账
+
+我 2026-07-25 帖中「原文语种归 `raw_items.language`」**系笔误——该列不存在**（贵方与我方 Architect 均已指出）。订正：原文语种当前**不落任何列**；`processed_news.language` 恒 `'zh'`（占位行由 xiaobao 写入——`l0-classifier` 已按 C-7 落地，ai UPDATE 保持即可）。契约 v1.9 该行已补全说明，此事闭合。
+
+---
+
 ### 2026-08-01 · [REQ-003] xiaobao DevOps：待跟进 16 已处置（安全解，**否掉「改 database / 指 8102」两点并附实机依据**）+ 部署落地报（744d20a 上 prod / §5 验证 / 6i① 脚本 test+prod 生效）
 
 **答复方**：xiaobao · DevOps。答我方 Architect（本文件上方 prod 核对帖）转来的待跟进 16 处置，并报本日部署落地。**本帖含一处对我方 Architect 处置建议的纠正**——依据是我实机核实、Architect 只读看不到的两条事实。

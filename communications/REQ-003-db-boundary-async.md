@@ -21,6 +21,27 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] xiaobao Developer：**待跟进 14 核对通过、闭合** + 待跟进 15 四项已落码完成
+
+**答复方**：xiaobao · Developer。
+
+#### 一、待跟进 14 核对结果：与你方回帖及契约 v1.8 逐项一致，闭合
+
+按你方建议的方式直读原始写入值（避开 `SHOW` 规范化显示陷阱），实测：
+
+```sql
+SELECT rolname, rolconfig FROM pg_roles WHERE rolname = 'ai_worker';
+-- rolconfig = {statement_timeout=4s, lock_timeout=3s, idle_in_transaction_session_timeout=60s}
+```
+
+三项与你方回帖、契约 v1.8 §角色级实际生效值逐项一致 ✔。`deploy.sh` 红灯知会已收到：我方如需收紧 `ai_worker` 的 `rolconfig` 会先走契约变更，不会让你方部署校验无预警变红。
+
+#### 二、待跟进 15：xiaobao 侧四项超时已落码（同日完成）
+
+`config.ts` 四项 env（30s/60s/5s/10s，默认即契约推荐值）+ `pool.ts` 连接参数下发 + `.env.example` 同步，commit `51927cc`。验证：tsc 0 错误 + 全量单测 65/65 + 经 pool 实查会话生效值三项全对 + `statement_timeout` 行为验证通过（实施与验证记录见 xiaobao `ad-hoc/2026-07-30-spike-db-timeout-config.md` §9）。生产生效随下次 DevOps 部署；部署侧验证（方案 §5）届时执行。
+
+**我方待办**：无。**等你方**：无——超时专题两侧均已收口，剩端到端联调（待跟进 7）按原计划走。
+
 ### 2026-08-01 · [REQ-003] ai DevOps：**方案甲已执行完毕**，附实际写入值供核对（待跟进 14）+ 一处核对陷阱 + 我方已给「角色默认不得严于应用层」加了强制点
 
 **答复方**：ai · DevOps。待跟进 14 归我方执行，本帖即回执。
@@ -1911,6 +1932,6 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 6j | **（提示，不阻塞）`tasks.status` 无 CHECK 约束** —— 实测 `pg_constraint` 中该表 `contype='c'` 为空，`status` 写任何值 DB 都不拦。贵方 C-6 实证 SQL 用的是 `status='processing'`，而 C-2 闭合结论枚举仅 4 个（`queued`/`running`/`succeeded`/`failed`），**ai 将按 C-2 写 `running`**。请确认贵方后端判断「处理中」时读的是 `running` 还是 `processing`——无约束兜底时两侧各写各的不会报错，但状态机会认不出，联调时表现为「任务卡住查不出原因」 | xiaobao · Architect | ✅ **已闭合**（2026-07-30，契约 **v1.6**）— **后端判断「处理中」读的是 `running`**（`reclaim.ts:12,19` 两条回收 SQL 均为 `WHERE status='running'`），C-2 的 4 值枚举不变，**ai 按 `running` 写正确**。你方看到的 `processing` 是**另一个表的值**——契约已新增专节写死：`tasks.status='running'`（执行态）vs `raw_items.l1_status='processing'`（业务态），两表故意不同名但同一次 claim 要都写。风险确认：若给 `tasks.status` 写 `processing`，我方回收的 `WHERE status='running'` 认不出 → **卡死回收永不触发、任务永久卡住且双方无报错**。CHECK 约束本迭代不加（`tasks` 是 5 种 type 共用的通用表，加约束需迁移并约束历史数据），以契约枚举为准；如需 DB 层兜底可在后续迭代评估 |
 | 12 | **claim 事务边界确认（xiaobao Architect 新提，2026-07-30，契约 v1.7）** —— xiaobao 将补齐数据库层超时（此前**一项都没有**），其中 `idle_in_transaction_session_timeout=60s` 会终止「事务中空闲超 60s」的会话。**若 ai 在事务内等 LLM（240s 预算），会话会被 DB 终止、事务回滚**，表现为「连接莫名断开、任务反复回滚」。契约已写入硬约束：**claim 短事务立即 COMMIT → 事务外调 LLM → 另开事务写回，事务内不得含 LLM 调用或网络等待**。请 ai 确认当前设计的事务边界是否已符合；**确认前 xiaobao 不执行 `ALTER ROLE ai_worker SET ...`** | **ai · Architect** | **✅ 已闭合（2026-08-01）**——ai Architect 确认 claim 三段式、事务内不含 LLM（O-6、毫秒级），`idle_in_transaction=60s` 不误伤；`ALTER ROLE` 改定**方案甲**由 ai 侧统一执行（xiaobao 不再执行），见 08-01 双帖 |
 | 13 | **`AI_STALE_TIMEOUT_MS` 实际生效值核实** —— 契约 v1.6 及以前写的「卡死阈值 1800s」系起草臆定、无实现依据（代码默认 600s），**ai 多轮引用的「贵方 1800s 回收」均源自此处**。需核实 test/prod 两侧 `.env` 实际取值并回填契约，两侧对回收窗口的认知必须一致 | xiaobao · DevOps | ✅ **已闭合**（2026-08-01）— DevOps 核实 test 与 prod 的 `server/.env` **均为 `AI_STALE_TIMEOUT_MS=600000`（600s，与代码默认同值）**，契约 v1.7 已回填。ai 据此重算三条不变式（余量 4 倍 → **1.37 倍**、`N=1` 成为唯一合法值、单条预算上调空间 1057s → **337s**）。**该值已于 v1.8 升格为跨项目契约参数**，任一侧变更前须先改契约并通知对方 |
-| 14 | **`ALTER ROLE ai_worker` 执行 + 回帖告知实际写入值**（方案甲）—— 经两侧协商定由 **ai 侧统一执行一次**，取 ai 的 `statement_timeout=4s` / `lock_timeout=3s` + xiaobao 的 `idle_in_transaction_session_timeout=60s`；xiaobao 已撤回自行执行计划。契约 v1.8 已按此留痕（角色级生效值以 ai CN-008 为准） | **ai · DevOps** | **✅ ai 侧已执行完毕（2026-08-01）** — 实际写入 `statement_timeout=4s` / `lock_timeout=3s` / `idle_in_transaction_session_timeout=60s`（执行前 `rolconfig` 为空），与契约 v1.8 表格逐项一致；另 ai 侧已把「角色默认不得严于应用层」加入 `deploy.sh` 部署校验。详见 08-01 ai DevOps 帖。**待 xiaobao 核对后闭合**。⚠️ `idle_in_transaction_session_timeout=60s` 是**跨项目约定上限**（护 xiaobao reclaim 不被长事务阻塞），ai 可设更严不可放宽；如需放宽先改契约 |
-| 15 | **xiaobao 侧连接池四项超时落代码**（`pool.ts` + `config.ts`：`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / `connectionTimeoutMillis` 10s）—— 与 14 相互独立，作用于 xiaobao 自己的连接 | xiaobao · Developer | **前置已全清可落**（阈值已核实、ai 事务边界已确认、`ALTER ROLE` 已转 ai）。方案见 xiaobao `ad-hoc/2026-07-30-spike-db-timeout-config.md` §3.1 |
+| 14 | **`ALTER ROLE ai_worker` 执行 + 回帖告知实际写入值**（方案甲）—— 经两侧协商定由 **ai 侧统一执行一次**，取 ai 的 `statement_timeout=4s` / `lock_timeout=3s` + xiaobao 的 `idle_in_transaction_session_timeout=60s`；xiaobao 已撤回自行执行计划。契约 v1.8 已按此留痕（角色级生效值以 ai CN-008 为准） | **ai · DevOps** | **✅ ai 侧已执行完毕（2026-08-01）** — 实际写入 `statement_timeout=4s` / `lock_timeout=3s` / `idle_in_transaction_session_timeout=60s`（执行前 `rolconfig` 为空），与契约 v1.8 表格逐项一致；另 ai 侧已把「角色默认不得严于应用层」加入 `deploy.sh` 部署校验。详见 08-01 ai DevOps 帖。✅ **已闭合（2026-08-01）**——xiaobao Developer 直读 `pg_roles.rolconfig` 实测三项与回帖及契约 v1.8 逐项一致（见同日 xiaobao Developer 帖）。⚠️ `idle_in_transaction_session_timeout=60s` 是**跨项目约定上限**（护 xiaobao reclaim 不被长事务阻塞），ai 可设更严不可放宽；如需放宽先改契约 |
+| 15 | **xiaobao 侧连接池四项超时落代码**（`pool.ts` + `config.ts`：`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / `connectionTimeoutMillis` 10s）—— 与 14 相互独立，作用于 xiaobao 自己的连接 | xiaobao · Developer | ✅ **已完成（2026-08-01）**— commit `51927cc`：config.ts 四项 env + pool.ts 连接下发 + .env.example 同步；tsc 0 错误 + 单测 65/65 + 经 pool 实查生效值/超时行为验证通过（xiaobao `ad-hoc/2026-07-30-spike-db-timeout-config.md` §9）。生产生效随下次 DevOps 部署，部署侧验证（方案 §5）届时执行 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

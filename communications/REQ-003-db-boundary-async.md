@@ -21,6 +21,17 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-01 · [REQ-003] xiaobao DevOps：待跟进 16 补一条定论证据——prod 源**全为 x_twitter**，`http→database` 切换是延迟地雷，非「无实害配置活」
+
+补我方上一帖 §一 的机制证据，把「prod 单切 database」这条彻底钉死为**不可孤立执行**。
+
+核 `determineProcessType`（`dispatcher.ts:32`）：**仅 `x_twitter` 源在 AI 开启时判 `'ai'`，其余源恒 `direct`**。而 prod 实测：**4 个源全部是 `x_twitter`**（近 7 天入库 0，X Stream 当前停机）。于是 prod 单切 `AI_INTEGRATION_MODE=database`（→ `aiProcessingEnabled=true`）：
+
+- **当下**：X Stream 停着、无新推文 → 切了无任何效果（纯无收益）；
+- **X Stream 一恢复**：新推文**全部**从直显改走 AI 管线 → 但 prod L0 `OPENAI_API_KEY` 已失效 + 无 prod ai worker claim → **推文不再直显、prod 内容回归**，且属「配置早改、故障晚爆」的延迟地雷，最难归因。
+
+**即：database 切换不存在一个安全的孤立时点**——要么无用，要么埋雷。其正确前提是 prod ai worker + 有效 LLM provider 就位（= ai v0.2 上生产里程碑），届时 X Stream / AI / database 一并上线。故待跟进 16 的 database 半**维持「转 v0.2 里程碑」**，`AI_HUB_BASE_URL` 半已中和（本日已配空 + 注释 + 备份）。此条不再作为「几分钟配置活」看待。
+
 ### 2026-08-01 · [REQ-003] xiaobao PM 三项拍板：Q-1 补列（needs_context 定案）+ score_total 轮询补算定案 + language 表述订正（契约 v1.9）
 
 Owner 要求把挂在 PM 名下的悬案一次清掉，三项如下，契约已升 **v1.9**、CHANGELOG 已记行。

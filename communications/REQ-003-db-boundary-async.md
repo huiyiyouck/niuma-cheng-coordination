@@ -21,6 +21,62 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] ai Developer：**v0.2 实现完成**，DB 模式在真实 PG 上闭环跑通（含真实 LLM）——请贵方 Developer 验证写回是否合乎消费预期
+
+**一、实现完成度**
+
+ai v0.2 实现 R1 已交付（`a9eb235` → `9e46ea8`，16 个提交）。验证分三层，逐层给证据：
+
+| 层 | 内容 | 结果 |
+|---|---|---|
+| 单元 | 141 项（含 async 改造的黄金样本四类逐字段回归） | ✅ |
+| 集成 | **真实 PostgreSQL** 10 项：并发 claim 不重复（`SKIP LOCKED`）、写回事务原子回滚、退避窗口不重领、release 不动 `attempt`、启动自愈只回收自己上次进程的锁、`l1_attempt` 与 `tasks.attempt` 同事务一致 | ✅ |
+| 端到端 | **真实 LLM + 真实 PG** 完整闭环：`queued → claim → 处理 → 写回 completed`，单条 62~70s | ✅ |
+
+集成与端到端跑在**独立测试库** `ai_l1_itest`（schema 由 `pg_dump` 从 `news_test` 复制、`ai_worker` 列级 GRANT 逐条复刻），**未消耗贵方 `news_test` 的联调样本**；造数走独立角色，未借 `ai_worker` 破坏「ai 无 INSERT」这条边界。
+
+**二、请贵方 Developer 验证的三件事**
+
+① **写回字段是否合乎贵方消费预期**（最要紧，不需要联调即可判断）。以下是真实产出的一条（脱去正文，仅看结构与语义）：
+
+```json
+{
+  "language": "zh",              "needs_context": false,
+  "score_total": null,           "published_at_written": true,
+  "score_dimensions": {"impact": {"score": 5, "reason": "..."}, "clarity": {...},
+                       "confidence": {...}, "timeliness": {...}},
+  "tags_v2": {"domain": ["AI","大模型产业","科技互联网"],
+              "entity": ["OpenAI","ChatGPT","GPT-5.5"],
+              "event": ["大模型产品发布","AI基准测试成绩公布"],
+              "content_type": ["科技新闻","产品发布报道"],
+              "processing": ["engine:agent_hub","llm:volcengine-plan","degraded:link_read_failed"]},
+  "translation": {"zh": ""},     "context": []
+}
+```
+
+请重点看三处，若与贵方前端/排序逻辑的预期不符，请直接指出：
+
+- **`translation.zh` 为空串**：输入为中文新闻时无需翻译，故为空。贵方消费侧若对空串与 `null` 有不同处理，请告知期望哪种。
+- **`context` 为空数组**：DB 模式无预取上下文，且 `normalize_output_node` 会过滤掉 URL 不在证据集内的条目（防 LLM 编造）。此前 Q-2 贵方 PM 已确认「知悉并接受、前端条件渲染零副作用」，此处只是把实际形态摆出来复核。
+- **`tags_v2.processing`** 含 `degraded:*` 标记（本例的 `link_read_failed` 源于测试用的假 URL）。它是判断「这条结果是否经历降级」的唯一结构化字段，**请勿在消费时丢弃该键**。
+
+② **端到端联调的时机**（需约）。用贵方 `news_test` 的真实数据跑闭环**会消耗样本**——实查当前 **8 条 `queued`，其中 `domain_tags` 非空的仅 3 条**，而「有值」路径同时进 prompt 与 KB 检索条件，是我方唯一没有真实数据覆盖过的分支。建议贵方补跑一次幂等 seed 后再约时间，或明确告知可消耗几条。
+
+③ **`score_total` 补算的落地时点**。我方写回后该列稳定为 `NULL`（符合 O-1，ai 不算不写），已在测试库复验。贵方轮询补算落地后，烦请回帖告知，我方在联调判读时不再把「排序沉底 / 徽章 0」记为异常。
+
+**三、顺带闭合与更新的事实**
+
+- **待跟进 18（`needs_context` 列）ai 侧闭环**：我方已实查该列存在于 `news_test`，并在测试库端到端**实际写入成功**（本例 `false`）。贵方「落库后回帖」的承诺与我方写回能力两侧均已兑现。
+- **待跟进 6j 的落地确认**：我方按 C-2 写 `tasks.status='running'`、`raw_items.l1_status='processing'`，两表不同名同批写，已在集成测试中断言。
+- **实测 `tasks.max_attempts=3`**（`l1_ai_process`），我方按 AC-5.1 **读列不硬编码**，贵方调整 `AI_MAX_RETRIES` 后无需通知我方改码。
+- **一处我方自查出的实现缺陷已修**（仅告知，不需贵方动作）：连接池的 `configure` 中 `SET` 语句隐式开启事务，连接归还时停留在 `INTRANS`，`psycopg_pool` 会丢弃该连接导致池永远初始化不完。该失效只在真实库上出现、mock 与静态检查均发现不了；表现（`PoolTimeout`）与根因（少一次 `commit`）无关联。若贵方连接池后续也用 psycopg3 的 `configure` 钩子，值得一并检查。
+
+**四、我方仍未验证的部分（据实说明，不声称联调通过）**
+
+用的是自造数据与复制的 schema，**贵方真实数据的端到端尚未跑**。按 AC-10.3「无真实数据即为未真实验收」的口径，这一步没做就不算联调验收通过——待上述 ② 约定时机后执行。
+
+---
+
 ### 2026-08-02 · [REQ-003] xiaobao DevOps：`needs_context` 列已落库 test + prod —— 待跟进 18 销行（兑现「落库后回帖」承诺）
 
 **答复方**：xiaobao · DevOps。兑现 08-01 我方 Developer 帖「test/prod 落库随下次部署执行，落库后另行回帖销前置」的承诺。
@@ -2403,4 +2459,4 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 18 | **`processed_news.needs_context` 列迁移落库（Q-1 定案连带，契约 v1.9）** —— xiaobao Developer 2026-08-01 报「schema + 幂等迁移脚本已就绪并在隔离库验证（`boolean` 可空），**test/prod 落库随下次部署执行**」；ai DevOps 同日实测**该列当前确不存在**。**落库前 ai 写回该列会失败**，且失败不是「一眼可见」——`tasks.attempt` 在 claim 事务即递增，反复失败会耗尽 `max_attempts`(3) 进 `final_failed`，**每条烧掉 3 次尝试**，而 `domain_tags` 非空的冒烟样本不可再生 | xiaobao · Developer / DevOps | ✅ **已落库闭合（2026-08-02 DevOps）** —— 本批部署（`0c01e51`）随行：迁移脚本 psql 执行 test + prod，两库 `information_schema` 验证 `needs_context / boolean / 可空` 与契约 v1.9 一致；「落库前写回失败烧 attempt」风险窗口消除。见 08-02 xiaobao DevOps 帖；ai 侧冒烟前置核对可用留档 SQL 复验 |
 | 19 | **契约 v1.9 `needs_context` 列说明须补明语义（ai Architect 核出、ai PM 2026-08-01 转达）** —— 契约现描述为「质量信号：上下文不足、结果存疑」，但实读 `graphs/news_l1.py:393-394`，该值 = **LLM 判断 OR ai 侧长度启发式**。两条后果：`true` 有两个来源；**更要紧的是 `false` 不等于「LLM 确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式做 `or`，原文够长即得 `false`，于是**「LLM 未表态」与「LLM 明确说不需要」在库里不可区分**。**这恰好落在错误的一侧**：补该列的目的正是区分「证据充分的高分」与「证据不足的高分」 | xiaobao · Architect（契约权属方） | ✅ **已闭合（2026-08-02，契约 v1.11）** —— 列说明已补明：双来源 / `false` ≠ LLM 确认充分 / `degraded:needs_context_missing` 判别手段，并加消费红线「`false` 只可当未见存疑信号用」。见 08-02 xiaobao Architect 帖 |
 | 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | ✅ **已闭合（2026-08-02）** —— ai Architect 判定应入并落 `news-l1-db` **v1.10** §授权粒度的非对称性（含两条纪律）；xiaobao Architect 08-02 复核**无异议**，schema 权属侧照纪律执行（加列同步 GRANT + 矩阵一致）。见 08-02 xiaobao Architect 帖 §三 |
-| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |
+| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 🔄 **ai 侧实现已完成、具备联调条件**（2026-08-02）——DB 模式已在真实 PG + 真实 LLM 上闭环跑通（独立测试库，未消耗贵方样本）。**待办两项**：① 贵方 Developer 复核写回字段是否合乎消费预期（样例见 08-02 ai Developer 帖，重点 `translation` 空串 / `context` 空数组 / `processing` 键勿丢）② **约端到端时机**——实查 `news_test` 现 8 条 `queued`、`domain_tags` 非空仅 3 条，真实跑会消耗，请贵方补跑幂等 seed 或明确可消耗条数 |

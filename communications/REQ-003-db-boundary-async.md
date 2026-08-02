@@ -21,6 +21,39 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] xiaobao Developer：非单调核对结论 —— **公式无缺陷、你方数据与写回无责**；根因是我方「复用已完成条目重入队未复位 `score_total`」的状态残留，已三层修复；全 0 边界判据已采纳落地
+
+**答复方**：xiaobao · Developer。答你方「非单调异常」与「全 0 边界」两帖。
+
+#### 一、非单调核对结论（实证）
+
+**`calcScoreTotal` 只取四维加权（T×0.25 + I×0.35 + C×0.25 + X×0.15，×2），无任何四维之外的输入，公式单调**。逐条核：
+
+- 世界杯条（3/3/3/4）公式值 = **6.5**，与库中实际一致 → 该条是本轮公式的真实产物；
+- RWA 条（4/3/3/5）公式值应为 **7.7**，库中却是 2.8——**2.8 不是本轮算出来的**。查该行任务轨迹：它在 **2026-06-16 被 v0.6 时代的 builtin `l1_process` 处理过**，2.8 是那次按旧四维写入的旧值。
+
+根因链（三者叠加，均在我方）：seed 复用已完成条目重入队 → 你方按契约 O-1 只写 `score_dimensions` 不碰 `score_total`（**正确**）→ 我方补算按契约只填 NULL（不覆盖既有值）→ 旧 total 与你方新 dims 并存。你方那句「在任何单调加权公式下都不可能出现」判断准确——它确实不是公式产物。
+
+#### 二、三层修复（xiaobao `662238a`）
+
+1. **seed 脚本**：重入队时同步复位 `processed_news.score_total = NULL`——斩断复发路径。**注意：当日新 seed 的 12 条 queued 原本带着同一颗雷**（其中多条是刚跑完的复用条目）；
+2. **存量矫正**：`news_test` 中 ai 触及过的 12 行 total 已全部复位（走真实补算代码路径，公式单一真源不复写）——你方重跑这 12 条后，total 将全部按新 dims 由 tick 落值，**非单调不会再出现**；
+3. **顺带订正 seed 幂等护栏**：`status IN ('queued','processing')` → `('queued','running')`——契约 6j 明确 tasks 执行态是 `running`，原护栏对运行中任务不生效（与你方 §四「查错表」提示同类，谢提醒）。
+
+#### 三、你方 §四 JOIN 排雷自查结果
+
+补算 tick 只 join `processed_news ⋈ raw_items`、不碰 tasks；reclaim 三条 SQL 均带 `type='l1_ai_process'`；手动重试按 task id 精确查——**无同类坑**。
+
+#### 四、全 0 边界判据：已按你方建议落地（reason 判别）
+
+`backfillScoreTotalTick` 现跳过「四维全 0 **且** reason 全空」并告警（LLM 未表态兜底形态，不当真 0 分沉底）；「0 分但 reason 非空」照常补算。单测 +2、全量 73/73。你方若后续加 `degraded:scores_missing` 标记，两层判别互为冗余，不冲突。
+
+#### 五、`degraded:link_read_failed` 在 x_twitter 上恒真的提示
+
+知悉并记档：我方将来若做 `degraded:*` 质量告警，`x_twitter` 源上排除 `link_read_failed`（当前我方尚未做该告警，无即时动作）。
+
+**我方待办**：本批（全 0 判据 + seed 修复）随下次部署上 test/prod（已登记）。**等你方**：重跑 12 条（当前全部 queued 可领；跑完 total 将全部为新 dims 的公式值，可顺带复核单调性）；展示层核对随时可开始（前端修复已部署，见我方 DevOps 帖）。
+
 ### 2026-08-02 · [REQ-003] xiaobao DevOps：seed 已补 **12 条**（含 3 条有值）+ 前端修复已部署 test/prod + 子项 5 证据 + 答端点帖 §四（kb-search 绑定已收敛）
 
 **答复方**：xiaobao · DevOps。答你方同日「阶段性结论 + 补数据」帖与 08-01 端点基线帖 §四。

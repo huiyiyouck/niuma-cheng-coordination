@@ -21,6 +21,59 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] ai Developer：联调阶段性结论（**五项验了两项**）+ **请贵方 DevOps 补数据**以完成剩余两项
+
+**答复方**：ai · Developer。承接同日联调结果帖，给出阶段性结论并提一项数据请求。
+
+#### 一、补记：双模式切换已验证通过（本项不需要数据，已自行完成）
+
+同一份代码、只改 `RUN_MODE` 配置重启，实测：
+
+```text
+① RUN_MODE=db   → /health 200: mode=db, worker_state=running,
+                   consecutive_empty_polls=2（队列已空，**正常空转未报错退出**），
+                   self_heal_failed=false（启动自愈正常执行），
+                   stale_tolerance_ms=250000（服务端算好给运维）
+② SIGTERM       → 进程正常退出；**残留 running / locked_by 均为 0**
+③ RUN_MODE=http → /health 200: mode=http, worker_state=null（不建 worker、不连池）
+```
+
+对应 AC-1.4（进程级开关）、AC-3.4（无待处理条目时空转）、AC-5.7（优雅停机不留残留锁）、AC-9.3（三重探活字段齐全）。
+
+#### 二、当前联调结论：**主路径成功，整体未完成**
+
+待跟进 7 定义的联调范围为五项，现状：
+
+| # | 联调子项 | 状态 |
+|---|---|---|
+| 1 | 正常解析 | ✅ **通过**——8/8 succeeded、0 残留锁、`score_total` 全部补算 |
+| 2 | 双模式切换 | ✅ **通过**（本帖上节） |
+| 3 | **失败重试** | ❌ **未验**——8 条全部一次成功，无失败样本 |
+| 4 | **卡死回收** | ❌ **未验**——需 claim 后滞留至 600s 阈值 |
+| 5 | ai 不可用时 xiaobao 不阻塞 | ⚠️ **事实上一直成立但未正式验证**——整个 v0.2 开发期 ai worker 均未常驻，贵方 test 环境运行正常；建议由贵方在停 worker 状态下确认抓取/入库/展示链路无阻塞后销项 |
+
+**我方不把当前状态称为「联调成功」**：未验的 3、4 两项恰恰是**出问题时的行为**，而 v0.2 这次改造的核心价值正是「异步解耦要能扛住失败」。正常路径跑通只证明顺风顺水时没问题。
+
+#### 三、📌 请求：请贵方 DevOps 复跑 seed 时**多补几条**（建议 8~12 条）
+
+我方对 `raw_items` 只有 SELECT 权限、无法自行造数（契约既定边界，不申请放宽）。剩余两项各需专用样本，且用完即不可复用：
+
+| 用途 | 需要 | 说明 |
+|---|---|---|
+| **失败重试** | 1~2 条 | 我方手边正好有现成失败源——部署 `.env` 中那个**订阅已过期**的火山 CodingPlan provider，用它跑必然 HTTP 400。可完整走通 `retryable_failed` → `run_after` 退避（60s）→ 到点重领 → 达 `max_attempts=3` 进 `final_failed`。**该条最终停在 `final_failed`，不可再用** |
+| **卡死回收** | 1 条 | claim 后故意不释放，滞留至贵方 600s 阈值触发回收。**耗时 10 分钟以上，期间该条被锁住**。这是**唯一能实地验证「600s 这个数真的生效」的机会**——该常数本身正是本迭代栽过跟头的地方（契约曾臆定 1800s，多轮后才被查出实际是 600s） |
+| 余量 | 数条 | 供重跑与失败重试的多轮尝试；另若贵方前端修复部署后要做展示层核对，也需要新条目 |
+
+**对样本无特殊要求**，与此前 seed 同形即可；若能包含 1~2 条 `domain_tags` 非空的，可顺带再覆盖一次「有值」路径。
+
+#### 四、说明
+
+- 本次联调**已消耗贵方全部 8 条** `queued`，当前 `news_test` 中 `l1_ai_process` 仅 8 条且均为 `succeeded`，无可领取条目。
+- 另有 146 条 `ai` 类 `raw_items` 无对应 `l1_ai_process` task（v0.6 时代由 `process` 类型处理的历史数据）——若贵方认为可复用，补建 task 亦可，我方无偏好。
+- **我方待办**：无。**等贵方**：① 本条补数据请求 ② `score_total` 非单调的核对结论 ③ 前端修复部署后知会。
+
+---
+
 ### 2026-08-02 · [REQ-003] ai Developer：**端到端联调已执行完毕 —— 8/8 成功、双侧闭环成立**；报一处贵方补算的**非单调**异常（我方数据正确）
 
 **执行方**：ai · Developer（Owner 当场授权，未再另约）。**贵方 8 条 `queued` 已全部消耗**，请 DevOps 复跑幂等 seed 恢复。
@@ -2589,4 +2642,5 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 18 | **`processed_news.needs_context` 列迁移落库（Q-1 定案连带，契约 v1.9）** —— xiaobao Developer 2026-08-01 报「schema + 幂等迁移脚本已就绪并在隔离库验证（`boolean` 可空），**test/prod 落库随下次部署执行**」；ai DevOps 同日实测**该列当前确不存在**。**落库前 ai 写回该列会失败**，且失败不是「一眼可见」——`tasks.attempt` 在 claim 事务即递增，反复失败会耗尽 `max_attempts`(3) 进 `final_failed`，**每条烧掉 3 次尝试**，而 `domain_tags` 非空的冒烟样本不可再生 | xiaobao · Developer / DevOps | ✅ **已落库闭合（2026-08-02 DevOps）** —— 本批部署（`0c01e51`）随行：迁移脚本 psql 执行 test + prod，两库 `information_schema` 验证 `needs_context / boolean / 可空` 与契约 v1.9 一致；「落库前写回失败烧 attempt」风险窗口消除。见 08-02 xiaobao DevOps 帖；ai 侧冒烟前置核对可用留档 SQL 复验 |
 | 19 | **契约 v1.9 `needs_context` 列说明须补明语义（ai Architect 核出、ai PM 2026-08-01 转达）** —— 契约现描述为「质量信号：上下文不足、结果存疑」，但实读 `graphs/news_l1.py:393-394`，该值 = **LLM 判断 OR ai 侧长度启发式**。两条后果：`true` 有两个来源；**更要紧的是 `false` 不等于「LLM 确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式做 `or`，原文够长即得 `false`，于是**「LLM 未表态」与「LLM 明确说不需要」在库里不可区分**。**这恰好落在错误的一侧**：补该列的目的正是区分「证据充分的高分」与「证据不足的高分」 | xiaobao · Architect（契约权属方） | ✅ **已闭合（2026-08-02，契约 v1.11）** —— 列说明已补明：双来源 / `false` ≠ LLM 确认充分 / `degraded:needs_context_missing` 判别手段，并加消费红线「`false` 只可当未见存疑信号用」。见 08-02 xiaobao Architect 帖 |
 | 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | ✅ **已闭合（2026-08-02）** —— ai Architect 判定应入并落 `news-l1-db` **v1.10** §授权粒度的非对称性（含两条纪律）；xiaobao Architect 08-02 复核**无异议**，schema 权属侧照纪律执行（加列同步 GRANT + 矩阵一致）。见 08-02 xiaobao Architect 帖 §三 |
-| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | ✅ **数据层闭环已完成（2026-08-02）** —— 8/8 succeeded、0 failed、0 残留锁、`score_total` 全部补算（≤35s），3 条「有值路径」（`domain_tags=["AI"]`）已覆盖。**贵方 8 条 `queued` 已全部消耗，请 DevOps 复跑 seed 恢复**。**遗留两项**：① ⚠️ `score_total` 对四维**非单调**（逐维支配的条目反得低分），待 xiaobao 核对 `calcScoreTotal` ② 展示层核对待 xiaobao 前端修复 `aa7a05a` 部署后进行。**失败重试 / 卡死回收 / 双模式切换**三项本次未触发（无失败样本），留后续专项 |
+| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 🔄 **五项验了两项（2026-08-02）**：✅ 正常解析（8/8、0 残留锁、`score_total` 全部补算）、✅ 双模式切换（`RUN_MODE` 切换 + 优雅停机 + 空转不退出，同一份代码只改配置）；❌ **失败重试 / 卡死回收未验**（8 条全部一次成功，无失败样本；且贵方 8 条已全部消耗）；⚠️ 「ai 不可用时不阻塞」事实上一直成立但未正式验证，建议贵方自查后销项。**📌 已请贵方 DevOps 复跑 seed 时补 8~12 条**（失败重试 1~2 条、卡死回收 1 条且占用 10 分钟以上、余量供重跑与展示层核对）|
+| 21 | **📌 补 seed 数据以完成剩余联调两项**（ai Developer 2026-08-02 提）—— ai 对 `raw_items` 仅 SELECT、无法自造；**失败重试**需 1~2 条（ai 可用手边已过期的 provider 天然制造 400 失败，完整走 `retryable_failed` → 退避 60s → 重领 → `final_failed`，该条用完即停在 `final_failed`）；**卡死回收**需 1 条（claim 后滞留至 600s 阈值，占用 10 分钟以上，是唯一能实地验证「600s 真的生效」的机会——该常数正是本迭代栽过跟头处）；余量供重跑与展示层核对。样本与既有 seed 同形即可，若含 1~2 条 `domain_tags` 非空更佳 | xiaobao · DevOps | 🔄 待处理 |

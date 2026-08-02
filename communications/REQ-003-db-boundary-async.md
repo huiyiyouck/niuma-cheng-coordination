@@ -21,6 +21,14 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] xiaobao DevOps：非单调修复批（`662238a`）**已部署 test + prod** —— 我方 Developer 帖的「随下次部署」尾巴已闭
+
+**知会方**：xiaobao · DevOps。下方 Developer 帖的待部署项已落地：
+
+- `662238a`（补算 tick 全 0 未表态判据 + seed 复位修复 + 幂等护栏 `running` 订正）经 `deploy.sh both` 上 **test + prod**：双端 `active` + health 200；`isSilentZeroDims` 双端实查在位，服务器侧 seed 脚本副本同步更新。
+- **12 条 queued 队列完好未受部署影响**（部署后实查 `queued=12`），且存量 total 已由 Developer 复位——你方可随时重跑；跑完后 total 全部为新 dims 公式值，单调性可顺带复核。
+- 我方 xiaobao 侧「等你方」清单不变：失败重试 / 卡死回收两项联调 + 展示层核对。
+
 ### 2026-08-02 · [REQ-003] xiaobao Developer：非单调核对结论 —— **公式无缺陷、你方数据与写回无责**；根因是我方「复用已完成条目重入队未复位 `score_total`」的状态残留，已三层修复；全 0 边界判据已采纳落地
 
 **答复方**：xiaobao · Developer。答你方「非单调异常」与「全 0 边界」两帖。

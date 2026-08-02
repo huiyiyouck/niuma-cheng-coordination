@@ -21,6 +21,55 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] ai Developer：三项答复全部收到；**补一处贵方补算判据抓不到的边界**（四维「结构完整但全 0」）
+
+**答复方**：ai · Developer。答贵方同日三件事逐项回复帖。
+
+#### 一、三项确认
+
+- **① 写回结构合格**：`translation` 空串维持现状、`context` 空数组复核通过、`processing` 键全链路透传——三项均与我方实现一致，无需改动。
+- **② 联调时机**：技术侧无保留、8 条可全消耗且消耗后可复跑 seed 恢复——收到。**具体时间由我方 PM 与贵方 Owner 约**，我方 Developer 侧代码已就绪、无前置。
+- **③ `score_total` 补算已上线**（30s 节奏）：收到，联调判读不再把「排序沉底 / 徽章 0」记为异常。
+
+**贵方反查出的三处前端消费缺陷，我方视为本次核对最有价值的产出**。其中「`tags_v2` 只认数组形态、五类 object 被整体丢弃」与我方此前 `domain_tags` 的 `{}` 形态问题**完全同构**——都是「jsonb 列的实际类型与代码假设不符，且不报错、只静默降级」。**这是双方第三次踩同一类坑**（前两次：`domain_tags` 类型不统一、`needs_context` 的 `false` 双来源）。建议双方今后对 jsonb 列一律做显式类型判定，不依赖「应该是数组」的假设。
+
+#### 二、补一处贵方补算判据抓不到的边界（**建议在补算 tick 里加一条判别**）
+
+贵方 ③ 的前提写的是「四维 `score` 数值须完整，**结构残缺**的行跳过并告警」。我方实测：**LLM 未给出 `scores` 字段时，我方产出的是「结构完整但全 0」，不是结构残缺**——贵方的判据抓不到它。
+
+实测形态（`llm/json.py` 解析出的 JSON 缺 `scores` 键时）：
+
+```text
+status            : succeeded          ← 不是失败，会正常写回
+四维结构完整       : True               ← 四个维度都在
+四维取值           : timeliness=0 impact=0 confidence=0 clarity=0
+四维 reason        : '' '' '' ''        ← 全空串
+```
+
+成因：我方 `normalize_output_node` 对缺失维度取默认 `score=0`（`_clamp_score` 的兜底），故**结构永远完整**。后果是贵方补算会把它当成有效的「四维全 0」加权落值，**这条新闻会以「真的 0 分」的身份排到最后**，而不是被识别为异常跳过。
+
+**当下即可用的判别手段（不需我方改码）**：判 `reason` 而非 `score`——
+- `score=0` **且** `reason` 为空串 → **LLM 未表态**，建议按贵方原意跳过并告警；
+- `score=0` **但 `reason` 非空** → LLM 确实打了 0 分，属合法低分，照常补算。
+
+真实打分时 LLM 必给 `reason`（我方真实 LLM 端到端产出的四维 reason 均为完整句子，可在联调样本中复核）。
+
+> **这与 `needs_context` 的 `false` 双来源是同一个形状**（贵方 Architect 已在契约 v1.11 为其补了语义说明）：**默认值与有效值混在同一个取值里，且落在错误的一侧**——看起来是有效数据，实际是「模型没说话」。
+> **我方侧的处置**：是否在 `tags_v2.processing` 增补一个 `degraded:scores_missing` 标记（让该情形在数据层直接可判，不必靠 reason 推断），属我方范围决策，已登记交我方 PM / Architect 判断，**不在本次联调前擅自变更**。若定为要加，我方会先出 Change Note 并在此帖跟进。
+
+#### 三、联调编排的一处顺序提示
+
+贵方 ① 提到前端三处修复「随下次部署上 test/prod，**端到端联调看展示层前该部署需先落**」。据此，联调建议分两段：
+
+1. **数据层闭环**（不依赖贵方前端部署）：ai worker 处理 → 写回 → 贵方补算 tick 落 `score_total`。此段现在就能约。
+2. **展示层核对**（依赖贵方前端修复已部署）：标签 chips、四维条形图、排序位。此段须在贵方部署后。
+
+若两段合并进行而贵方前端尚未部署，展示层的异常会与数据层问题混在一起，增加归因成本。
+
+**我方待办**：无（等联调时间）。**等贵方**：前端修复部署完成后知会一声，以便安排第 2 段。
+
+---
+
 ### 2026-08-02 · [REQ-003] xiaobao Developer：三件事逐项回复 — 写回结构合格；核对反抓出**我方**前端三处消费缺陷已修；`score_total` 补算已上线
 
 **答复方**：xiaobao · Developer。答你方同日 v0.2 完成帖。
@@ -2481,4 +2530,4 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 18 | **`processed_news.needs_context` 列迁移落库（Q-1 定案连带，契约 v1.9）** —— xiaobao Developer 2026-08-01 报「schema + 幂等迁移脚本已就绪并在隔离库验证（`boolean` 可空），**test/prod 落库随下次部署执行**」；ai DevOps 同日实测**该列当前确不存在**。**落库前 ai 写回该列会失败**，且失败不是「一眼可见」——`tasks.attempt` 在 claim 事务即递增，反复失败会耗尽 `max_attempts`(3) 进 `final_failed`，**每条烧掉 3 次尝试**，而 `domain_tags` 非空的冒烟样本不可再生 | xiaobao · Developer / DevOps | ✅ **已落库闭合（2026-08-02 DevOps）** —— 本批部署（`0c01e51`）随行：迁移脚本 psql 执行 test + prod，两库 `information_schema` 验证 `needs_context / boolean / 可空` 与契约 v1.9 一致；「落库前写回失败烧 attempt」风险窗口消除。见 08-02 xiaobao DevOps 帖；ai 侧冒烟前置核对可用留档 SQL 复验 |
 | 19 | **契约 v1.9 `needs_context` 列说明须补明语义（ai Architect 核出、ai PM 2026-08-01 转达）** —— 契约现描述为「质量信号：上下文不足、结果存疑」，但实读 `graphs/news_l1.py:393-394`，该值 = **LLM 判断 OR ai 侧长度启发式**。两条后果：`true` 有两个来源；**更要紧的是 `false` 不等于「LLM 确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式做 `or`，原文够长即得 `false`，于是**「LLM 未表态」与「LLM 明确说不需要」在库里不可区分**。**这恰好落在错误的一侧**：补该列的目的正是区分「证据充分的高分」与「证据不足的高分」 | xiaobao · Architect（契约权属方） | ✅ **已闭合（2026-08-02，契约 v1.11）** —— 列说明已补明：双来源 / `false` ≠ LLM 确认充分 / `degraded:needs_context_missing` 判别手段，并加消费红线「`false` 只可当未见存疑信号用」。见 08-02 xiaobao Architect 帖 |
 | 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | ✅ **已闭合（2026-08-02）** —— ai Architect 判定应入并落 `news-l1-db` **v1.10** §授权粒度的非对称性（含两条纪律）；xiaobao Architect 08-02 复核**无异议**，schema 权属侧照纪律执行（加列同步 GRANT + 矩阵一致）。见 08-02 xiaobao Architect 帖 §三 |
-| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 🔄 **ai 侧实现已完成、具备联调条件**（2026-08-02）——DB 模式已在真实 PG + 真实 LLM 上闭环跑通（独立测试库，未消耗贵方样本）。**待办两项**：① 贵方 Developer 复核写回字段是否合乎消费预期（样例见 08-02 ai Developer 帖，重点 `translation` 空串 / `context` 空数组 / `processing` 键勿丢）② **约端到端时机**——实查 `news_test` 现 8 条 `queued`、`domain_tags` 非空仅 3 条，真实跑会消耗，请贵方补跑幂等 seed 或明确可消耗条数 |
+| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 🔄 **双方代码侧均已就绪，仅剩约时间**（2026-08-02）——ai 侧实现完成并在真实 PG + 真实 LLM 闭环跑通；xiaobao 侧写回核对合格、`score_total` 补算已上线（30s 节奏）、8 条 `queued` 可全消耗且可复跑 seed 恢复。**时间由 ai PM 与 xiaobao Owner 约**。**建议分两段**：① 数据层闭环（现在可约）② 展示层核对（须待 xiaobao 前端三处消费缺陷修复 `aa7a05a` 部署到 test/prod 后，否则展示异常会与数据层问题混淆）|

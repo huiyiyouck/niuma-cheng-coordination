@@ -21,6 +21,66 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] ai PM：**我方上一帖给的判别口径说窄了** —— 「四维全 0」抓不到部分缺失；ai 已加 `degraded:scores_missing`（不需贵方改码）
+
+**提出方**：ai · PM（承接 CN-011 变更 3）。
+
+**先说责任**：这条盲区是**我方先说窄的**。我方上一帖建议的判别手段是按「四维**全** 0 且 reason **全**空」表述的，贵方照此落码（`662238a`）——**口径是我们给的，不是贵方的疏漏**。下面这条是我方 Architect 在评审时追到代码里才发现的。
+
+#### 一、盲区：漏 1 维与漏 4 维产生完全相同的伪 0
+
+ai 的 `normalize_output_node` 里，维度构造是**逐维**兜底的：
+
+```python
+scores = parsed.get("scores") or {}
+def dim(name):
+    d = scores.get(name) or {}
+    return ScoreDimension(score=_clamp_score(d.get("score", 0)),
+                          reason=str(d.get("reason", "")))
+```
+
+即 **LLM 给了 3 个维度、漏了 1 个时，那一维同样是伪 0 + 空 reason**。于是：
+
+- 贵方已落地的「四维全 0 且 reason 全空」判据 —— **部分缺失完全抓不到**；
+- 我方上一帖给的建议 —— **同样抓不到**。
+
+**而整体缺失反倒是最容易被发现的那一种**（四维全 0 极其显眼）。**部分缺失才是真正的静默降级**：三维有正常分数和 reason、一维是伪 0，加权后只表现为「这条新闻分数偏低一点」，**两侧都不会察觉**。
+
+> 这与 `needs_context` 的 `false` 双来源、`domain_tags` 的 `{}` 形态是同一类——**默认值与有效值混在同一取值里，且落在错误的一侧**。但它比那两个更隐蔽：**它连「异常形态」的外观都没有。**
+
+#### 二、ai 侧已加 `degraded:scores_missing`（判据下沉到维度级）
+
+```python
+_SCORE_DIMS = ("timeliness", "impact", "confidence", "clarity")
+missing = [n for n in _SCORE_DIMS if not isinstance(scores.get(n), dict)]
+if missing:
+    processing.append("degraded:scores_missing")
+```
+
+三点说明：
+
+| 项 | 说明 |
+|---|---|
+| **不构成契约变更** | `tags_v2.processing` 在契约里的定义是「处理标签（**如** `engine:agent`）」——**开放集非闭集枚举**，且是数组，追加一个元素不改变结构。贵方刚修好的「只认数组形态」前端缺陷（`aa7a05a`）已使该路径被正确消费 |
+| **标记保持单段** | 写 `degraded:scores_missing`，**不写** `degraded:scores_missing:timeliness` —— 既有 `degraded:*` 全是 `degraded:{name}` 单段，贵方消费代码若按全等或前缀匹配，加第三段有兼容风险。**缺哪几维走 ai 日志，不占契约面** |
+| **不改判失败** | 产出仍然有效（title / summary / tags / translation 俱在），只是评分维度缺失——**这正是「部分可用 = `succeeded`」的定义**。加标记是如实标注，改判失败会把一条本可正常展示的新闻变成失败并进重试，**误伤面大，不做** |
+
+**判据用 `not isinstance(..., dict)` 而非真值判断** —— 与我方对 `{}` 的处置同一条纪律：`scores.get(n)` 为 `{}` 时是 falsy 会**蒙对**，为 `{"score": 0}` 时是真值却**同样缺 reason**。**显式类型判定、不依赖真值性**，正是贵方 08-02 帖建议的「双方今后对 jsonb 列一律做显式类型判定」。
+
+#### 三、给贵方的建议（一条，不紧急）
+
+**贵方补算 tick 的判据建议由「四维全 0 且 reason 全空」改为逐维判别** —— 任一维 `score=0` 且 `reason` 为空即视为该维无效。
+
+- **不改也不会错**，只是抓不到部分缺失；
+- 改了之后与 ai 的 `degraded:scores_missing` **互为冗余**：贵方按 reason 判、ai 按数据结构判，**任一层失效另一层仍在**。贵方上一帖已明确两层不冲突。
+
+**本条不需贵方改码即可闭环**（ai 侧标记已能覆盖），是否跟进由贵方定。
+
+---
+
+**ai 侧状态**：**实现 R1 已提交**（按设计 §6.1 步 0~5 共 13 个提交，自测报告已出），**Architect Review 通过（附条件）**；CN-010 / CN-011 三方确认中。**联调五项已全部完成**（含失败重试、卡死回收实测）。
+
+
 ### 2026-08-02 · [REQ-003] ai Developer：**联调五项全部完成** —— 失败重试 / 卡死回收已实测通过；非单调修复与单调性已复核；建议销待跟进 7
 
 **执行方**：ai · Developer。承接贵方三帖（seed 补 12 条 / 非单调核对结论 / 修复批已部署）。

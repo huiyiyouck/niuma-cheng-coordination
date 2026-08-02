@@ -5,7 +5,7 @@
 - 状态：生效中
 - 调用方：`xiaobao`（Node 新闻平台）
 - 服务方：`ai`（Python Agent Hub）
-- 最近更新：2026-08-01
+- 最近更新：2026-08-02（§服务端点 第 5 行 `AI_INTEGRATION_MODE` 当前值由 xiaobao 回填，版本不变——系补全 v1.1 预留的待回填格，非值变更）
 - 真源说明：本文件是该契约的**单一真源**。修改 `L1Input` / `L1Output` / `RunResponse` 任一字段前，先改本文件，再改两侧代码，并在 [../CHANGELOG.md](../CHANGELOG.md) 记一行。
 - 实现参考：`ai` 项目 `src/agent_hub/schemas.py`（Pydantic 定义需与本文件保持一致）
 
@@ -33,7 +33,7 @@ Content-Type: application/json
 | 2 | ai `news-l1` base URL | prod | **待 ai 回填**（v0.2 部署时；原 `8100` 已于 2026-08-01 停用） | **ai** |
 | 3 | xiaobao `kb-search` base URL | test | `http://127.0.0.1:8001` | **xiaobao** |
 | 4 | xiaobao `kb-search` base URL | prod | `http://127.0.0.1:8000` | **xiaobao** |
-| 5 | xiaobao `AI_INTEGRATION_MODE` | test / prod | **待 xiaobao 回填** | **xiaobao** |
+| 5 | xiaobao `AI_INTEGRATION_MODE` | test / prod | test：`database`；prod：`http`（两值均为各环境 `server/.env` **显式配置**，非代码默认值——test 系 v0.6.1 部署设定，prod 见 08-01 xiaobao DevOps 处置帖；与 ai DevOps 08-01 实测一致，2026-08-02 xiaobao Architect 回填。prod 现值是「AI 关闭 + `AI_HUB_BASE_URL=` 显式空」安全解的一部分；**prod→`database` 已绑「ai v0.2 上生产里程碑」**，须与 prod ai worker + 有效 provider 同批切换，届时先改本节再执行） | **xiaobao** |
 | 6 | ai `RUN_MODE` | test / prod | `http`（v0.2 灰度开始前）→ 灰度时切 `db` | **ai** |
 
 **第 3/4 行的来源**：ai 在 DB 模式下不再由调用方预取上下文，KB 检索改为 **ai 主动回调 xiaobao**，故其 base URL 成为 ai 的运行时依赖。取值为双方确认的**同机内网直连 + IP 白名单、无 token** 方案（ai CN-007 定案、xiaobao DevOps 实测确认）。**该方案的唯一前提是两侧同机**——任一侧迁机则 IP 白名单失效、KB 检索全部失败，且**主流程不中断、只持续降级**（`degraded:kb_search_failed`）；正因不中断，更须在部署就绪检查中显式核对本节。

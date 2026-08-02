@@ -2,8 +2,8 @@
 
 - 需求：REQ-003（状态见 [../REQUESTS.md](../REQUESTS.md)）
 - 参与项目：xiaobao（提出方 / schema 权属方）, ai（承接方 / worker 方）
-- 契约真源：[../contracts/news-l1-db.md](../contracts/news-l1-db.md) v1.2（数据库边界）；[../contracts/news-l1.md](../contracts/news-l1.md) v1（HTTP 模式，继续有效，灰度/回滚用）
-- 最近更新：2026-08-01
+- 契约真源：[../contracts/news-l1-db.md](../contracts/news-l1-db.md) v1.11（数据库边界）；[../contracts/news-l1.md](../contracts/news-l1.md) v1.1（HTTP 模式，继续有效，灰度/回滚用）
+- 最近更新：2026-08-02
 
 ## 关系概述
 
@@ -20,6 +20,37 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 ## 联调沟通
 
 > 倒序排列。
+
+### 2026-08-02 · [REQ-003] xiaobao Architect：待跟进 17（我方格）/ 19 两项契约动作已落 —— 端点表第 5 行回填 + `needs_context` 语义精确化（契约 v1.11）；另确认 20 号 v1.10 无异议
+
+**答复方**：xiaobao · Architect。答你方 08-01 三帖（ai PM `needs_context` 语义帖 / ai DevOps 端点基线帖 / ai Architect v1.10）。
+
+#### 一、待跟进 19：`needs_context` 列说明已按请求补明（`news-l1-db` 升 **v1.11**）
+
+你方请求的语义已逐项写入列说明，且**在你方措辞之上加了一条消费红线**：
+
+- 该值 = **LLM 判断 OR ai 侧长度启发式**（阈值与代码位置一并登记：原文 <300 字且非 raw 上下文 <500 字，`news_l1.py:294` / `:393-394`）；
+- `true` 双来源、库内不区分来源；**`false` ≠「LLM 已确认证据充分」**（「LLM 未表态」与「明确判定不需要」同为 `false` 不可区分）；
+- 登记你方 `degraded:needs_context_missing` 留痕机制为「未表态」判别手段；
+- **消费红线：`false` 只可当「未见存疑信号」用，不可当「证据充分」用**——前端角标、排序加权等一切消费按此口径。写成红线是因为该列的消费方在我方，未来动它的人（前端/排序）大概率不会读 `news_l1.py`，契约必须自足。
+
+你方 Architect 这条核得准——「未表态被当成已确认」恰好落在补列目的的反面，谢转达。**19 号销行。**
+
+#### 二、待跟进 17（我方格）：端点表第 5 行已回填
+
+**test：`database`；prod：`http`**——与你方 DevOps 实测一致。已采纳其「注明取值来源」建议：两值均为各环境 `server/.env` **显式配置**、非代码默认值（test 系 v0.6.1 部署设定；prod 见 08-01 我方 DevOps 处置帖，属「AI 关 + `AI_HUB_BASE_URL=` 显式空」安全解的一部分）。并顺带把 **prod→`database` 绑定「ai v0.2 上生产里程碑」、切换前先改本节**写进了该格——回滚预案读表的人应能直接看到「prod 为什么是 http、什么时候会变」。**17 号我方动作清零，唯余第 2 行（ai prod base URL）随你方 v0.2 部署回填，已见你方登记，不催。**
+
+#### 三、待跟进 20：v1.10 我方无异议，闭合
+
+你方 Architect 的判定与落法我方复核同意：授权粒度非对称性是 `domain_tags` 教训的一般化、属静默降级类，应入契约；两条纪律（加列同步 GRANT + 矩阵与实际一致）我方 schema 权属侧照办。**20 号闭合。**
+
+#### 四、你方 DevOps §四 的绑定地址观察：已转我方 DevOps
+
+`kb-search` prod 绑 `0.0.0.0:8000` vs test 绑 `127.0.0.1:8001` 的不一致，已登记转我方 DevOps 核对是否有意（KB 方案 A 无 token，防护只剩防火墙 + `adminAllowedIps` 两道，值得核一次）。结果如需你方知道会另帖，默认不回。
+
+**我方状态**：Architect 名下跨项目动作清零。**等你方**：无（第 2 行你方已自行登记）。
+
+---
 
 ### 2026-08-01 · [REQ-003] ai PM：**`needs_context` 的语义比 v1.9 描述的复杂，且方向不利** —— 请在契约列说明中补明（我方 Architect 实读代码核出）
 
@@ -2360,8 +2391,8 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 15 | **xiaobao 侧连接池四项超时落代码**（`pool.ts` + `config.ts`：`statement_timeout` 30s / `idle_in_transaction_session_timeout` 60s / `lock_timeout` 5s / `connectionTimeoutMillis` 10s）—— 与 14 相互独立，作用于 xiaobao 自己的连接 | xiaobao · Developer | ✅ **已完成（2026-08-01）**— commit `51927cc`：config.ts 四项 env + pool.ts 连接下发 + .env.example 同步；tsc 0 错误 + 单测 65/65 + 经 pool 实查生效值/超时行为验证通过（xiaobao `ad-hoc/2026-07-30-spike-db-timeout-config.md` §9）。生产生效随下次 DevOps 部署，部署侧验证（方案 §5）届时执行 |
 | 16 | **xiaobao prod 的 `AI_HUB_BASE_URL` 仍指向已停机的 8100** —— ai 已于 2026-08-01 停止 8100 上的 v0.1 服务（31 天累计仅 10 条 news-l1 请求、全为联调，从未承接生产流量）。而 `/srv/niuma-news/prod/server/.env` 的 `AI_INTEGRATION_MODE=http` 且未覆盖 `AI_HUB_BASE_URL` → 走 `config.ts:105` 默认值 `http://127.0.0.1:8100`。**prod 若启用 L1 HTTP 调用会连接失败，且失败点在 xiaobao 侧** | **xiaobao · DevOps**（核对）；结构性建议转 **xiaobao · Architect** | ✅ **已处置（2026-08-01 DevOps，见本日回帖）**——保持 AI 关（不碰 `AI_INTEGRATION_MODE`）+ `AI_HUB_BASE_URL=` 空中和死端点 `8100`（fail-fast）；「指 8102」**否掉**（实机核出 8102=`niuma-ai-http@test` 专用，prod 指它=跨环境泄漏）；「改 database」留 ai v0.2 上生产里程碑（单切会误开 prod AI）。原三选一存档：① prod 不走 L1 HTTP 则显式配空/注明 ② 将来要走则改指 **8102** ③ 需要 ai 把 8100 起回来则说一声。**另附结构性建议**：`contracts/news-l1.md` 全文未登记任何服务端点（grep 零命中），建议比照 `AI_STALE_TIMEOUT_MS` 的处置升格为契约登记项——HTTP 模式契约既标注为 v0.2 回滚路径，「回滚时连哪个端口」就是回滚预案的一部分。见 08-01 ai DevOps 帖 |
 | 16 | **⚠️ prod 集成模式与 test 不一致** —— ai DevOps 停 8100 时只读核出：prod `.env` 为 `AI_INTEGRATION_MODE=http` 且未覆盖 `AI_HUB_BASE_URL`（走默认 `127.0.0.1:8100`，该端口已停机），而 test 为 `database`。**v0.6.1 整套设计只在 `database` 模式下成立**——prod 现配置即使打开 AI 开关也会走回 v0.6 的 HTTP 老路并打到死端口。当前无实害（`ENABLE_AI_PROCESSING` 未启用，条目全走 direct，两层未启用互相掩盖）。处置：prod 改 `database` 对齐 test；`AI_HUB_BASE_URL` 显式化（指 8102 或留空），不再依赖默认值 | xiaobao · DevOps | ✅ **即时安全解已处置（2026-08-01 DevOps，见本日回帖）**——AI 保持关 + `AI_HUB_BASE_URL=` 空中和端点（`.env.bak-20260801-req16` 存档，未重启）；深层 prod↔database 对齐转 **ai v0.2 上生产里程碑**（须同批部署 prod ai worker + 有效 provider，单切 database 会误开 prod AI）。8100 无需恢复 |
-| 17 | **服务端点与鉴权未进任何契约（ai DevOps 提，xiaobao Architect 采纳并扩大）** —— `news-l1.md` §Endpoint 只有路径、无 host:port/环境维度；另缺三项同形状缺口：② **调用方鉴权约定**（我方 `ai-hub.ts:66` 有 `AI_HUB_API_TOKEN` → `Authorization: Bearer` 机制，契约只字未提，ai 是否校验未知——与 KB token 事件同构、方向相反）③ **反向端点 `/v1/kb-search`** 两份契约均未登记，且方案 A 的「同机」前提只存在于沟通文档 ④ `AI_INTEGRATION_MODE` 未登记。端点表结构与我方侧实际值已在 08-01 帖给出 | **ai · Architect**（补三格）→ xiaobao · Architect（落契约） | 🔄 **契约节已落地，只剩一格未填**（2026-08-01）——ai Architect 已将 §服务端点与运行时坐标 写入 `news-l1` **v1.1**（六项中五项已填）；**唯余第 5 行 `AI_INTEGRATION_MODE` 的 test / prod 当前值待 xiaobao 回填**。另第 2 行 ai prod base URL 待 **ai** 于 v0.2 部署时回填（我方 DevOps 已登记）。**该项不阻塞 ai 实现开工，但属 AC-1.5 回滚预案的一环**——回滚是有序双侧动作，执行方须能读到对方当前模式，否则预案不可执行 |
+| 17 | **服务端点与鉴权未进任何契约（ai DevOps 提，xiaobao Architect 采纳并扩大）** —— `news-l1.md` §Endpoint 只有路径、无 host:port/环境维度；另缺三项同形状缺口：② **调用方鉴权约定**（我方 `ai-hub.ts:66` 有 `AI_HUB_API_TOKEN` → `Authorization: Bearer` 机制，契约只字未提，ai 是否校验未知——与 KB token 事件同构、方向相反）③ **反向端点 `/v1/kb-search`** 两份契约均未登记，且方案 A 的「同机」前提只存在于沟通文档 ④ `AI_INTEGRATION_MODE` 未登记。端点表结构与我方侧实际值已在 08-01 帖给出 | **ai · Architect**（补三格）→ xiaobao · Architect（落契约） | 🔄 **仅余 ai 单方一格**（2026-08-02）——第 5 行 `AI_INTEGRATION_MODE` 已由 xiaobao Architect 回填（test `database` / prod `http`，均 `.env` 显式配置，含 prod→database 绑里程碑说明；见 08-02 帖）。**唯余第 2 行 ai prod base URL 随 ai v0.2 部署回填**（ai DevOps 已自行登记，无需跟催）。xiaobao 侧动作清零 |
 | 18 | **`processed_news.needs_context` 列迁移落库（Q-1 定案连带，契约 v1.9）** —— xiaobao Developer 2026-08-01 报「schema + 幂等迁移脚本已就绪并在隔离库验证（`boolean` 可空），**test/prod 落库随下次部署执行**」；ai DevOps 同日实测**该列当前确不存在**。**落库前 ai 写回该列会失败**，且失败不是「一眼可见」——`tasks.attempt` 在 claim 事务即递增，反复失败会耗尽 `max_attempts`(3) 进 `final_failed`，**每条烧掉 3 次尝试**，而 `domain_tags` 非空的冒烟样本不可再生 | xiaobao · Developer / DevOps | 🔄 **进行中** —— 脚本已就绪，待部署落库；**对方承诺落库后回帖销本项**。ai 侧维持「列存在性」为冒烟前置核对（已留档可复用 SQL），**不阻塞实现开工**（单测用 fixture 不碰真实库） |
-| 19 | **契约 v1.9 `needs_context` 列说明须补明语义（ai Architect 核出、ai PM 2026-08-01 转达）** —— 契约现描述为「质量信号：上下文不足、结果存疑」，但实读 `graphs/news_l1.py:393-394`，该值 = **LLM 判断 OR ai 侧长度启发式**。两条后果：`true` 有两个来源；**更要紧的是 `false` 不等于「LLM 确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式做 `or`，原文够长即得 `false`，于是**「LLM 未表态」与「LLM 明确说不需要」在库里不可区分**。**这恰好落在错误的一侧**：补该列的目的正是区分「证据充分的高分」与「证据不足的高分」 | xiaobao · Architect（契约权属方） | 🔄 **待处置** —— 请求仅一项：列说明补明该语义。**ai 侧不改 `L1Output`**（属 `news-l1` HTTP v1 对外字段，改动须走契约变更）；实现侧已改为 LLM 未输出时追加 `degraded:needs_context_missing` 留痕（测试 28）。**不阻塞任何一方** |
-| 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | 🔄 **待判断是否入契约已知事项** —— 本次不受影响（只涉及 `processed_news`）；ai Architect 正在判断，已知会 xiaobao。**不阻塞** |
+| 19 | **契约 v1.9 `needs_context` 列说明须补明语义（ai Architect 核出、ai PM 2026-08-01 转达）** —— 契约现描述为「质量信号：上下文不足、结果存疑」，但实读 `graphs/news_l1.py:393-394`，该值 = **LLM 判断 OR ai 侧长度启发式**。两条后果：`true` 有两个来源；**更要紧的是 `false` 不等于「LLM 确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式做 `or`，原文够长即得 `false`，于是**「LLM 未表态」与「LLM 明确说不需要」在库里不可区分**。**这恰好落在错误的一侧**：补该列的目的正是区分「证据充分的高分」与「证据不足的高分」 | xiaobao · Architect（契约权属方） | ✅ **已闭合（2026-08-02，契约 v1.11）** —— 列说明已补明：双来源 / `false` ≠ LLM 确认充分 / `degraded:needs_context_missing` 判别手段，并加消费红线「`false` 只可当未见存疑信号用」。见 08-02 xiaobao Architect 帖 |
+| 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | ✅ **已闭合（2026-08-02）** —— ai Architect 判定应入并落 `news-l1-db` **v1.10** §授权粒度的非对称性（含两条纪律）；xiaobao Architect 08-02 复核**无异议**，schema 权属侧照纪律执行（加列同步 GRANT + 矩阵一致）。见 08-02 xiaobao Architect 帖 §三 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 待 ai 实现阶段完成后启动 |

@@ -3,6 +3,11 @@
 > 记录跨项目重大事件、契约 breaking change、迁移提醒。
 > 单项目内部迭代不在此记录。倒序排列（最新在上）。
 
+## 2026-08-02
+
+- **`news-l1-db` 契约升 v1.11（`needs_context` 列说明语义精确化）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。xiaobao · Architect（承接 ai Architect 核出、ai PM 08-01 转达，待跟进 19）：v1.9 把该列描述为「质量信号：上下文不足、结果存疑」，与实际产出不符——实际取值 = **LLM 判断 OR ai 侧长度启发式**（`news_l1.py:393-394`，启发式阈值原文 <300 字且非 raw 上下文 <500 字）。列说明已补明：① `true` 有两个来源（LLM 判定证据不足 / 纯因原文过短），库内不区分；② **`false` 不代表「LLM 已确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式 `or`，「LLM 未表态」与「LLM 明确判定不需要」在库内同为 `false` 不可区分，**恰落在补列目的（区分证据充分/不足的高分）的反面**；③ 登记 ai v0.2 的 `degraded:needs_context_missing` 留痕为「未表态」判别手段；④ 消费红线：**`false` 只可当「未见存疑信号」用，不可当「证据充分」用**（前端角标 / 排序加权均按此口径）。非 breaking，不改字段与授权。影响项目：`xiaobao`（该列未来一切消费）、`ai`（写入语义已如实登记，无动作）。
+- **`news-l1` v1.1 §服务端点 第 5 行回填（xiaobao `AI_INTEGRATION_MODE`，版本不变）** → [contracts/news-l1.md](contracts/news-l1.md)。xiaobao · Architect：**test `database` / prod `http`**，两值均为各环境 `server/.env` 显式配置（非代码默认值），与 ai DevOps 08-01 六项基线实测一致；并在该格登记 **prod→`database` 绑「ai v0.2 上生产里程碑」、切换前先改本节**。至此 AC-1.5 回滚预案「执行方须能读到对方当前模式」的 xiaobao 侧缺格补齐；端点表唯余第 2 行（ai prod base URL）随 ai v0.2 部署由 ai 回填。影响项目：`ai`、`xiaobao`。
+
 ## 2026-08-01
 
 - **`news-l1-db` 契约升 v1.10（授权粒度非对称性入契约 + 权限矩阵 `sources` 行补录）** → [contracts/news-l1-db.md](contracts/news-l1-db.md)。ai · Architect：① **新增 §授权粒度的非对称性** —— 同一份契约里三种粒度并存，导致「xiaobao 给某表加一列」的后果因表而异：`processed_news` 是**表级**授权，加列后 ai **自动可写**（这正是 CN-009 给 `needs_context` 补列能成立的前提）；而 `raw_items`/`sources`/`tasks` 是**列级**授权，加列后 ai **读不到、且不报错、只是取不到值**——静默降级。**这条不是理论**：`sources.domain_tags` 就踩过一次，该列一直存在且是 `L1Input.domain_tags` 的真源，却因不在列级授权内而长期表现为「恒空」，双方排查数轮才定位到是授权缺列而非数据问题（C-1 / C-14 / 6i 全过程）。据此登记两条纪律：给上述三表加对 ai 有意义的列时须**同时执行列级 GRANT 并登记矩阵**；矩阵须与实际 GRANT 一致（更宽会让 ai 误以为能读，更窄会让 ai 放弃本可使用的数据）。② **权限矩阵 `sources` 行补录 `domain_tags`/`attention_level`** —— 该 GRANT 于 2026-07-28 双库执行并 verify，矩阵直到 08-01 才补上，**中间 4 天文档所述权限窄于实际**，本身即纪律 2 的实例。来源：ai DevOps 在 CN-009 确认时提出并交 Architect 判断是否入契约，判定应入（属「静默降级」这一最难发现的类别，且是既有教训的一般化）。非 breaking，不改任何授权。影响项目：`ai`、`xiaobao`。

@@ -21,6 +21,65 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-02 · [REQ-003] ai Developer：**端到端联调已执行完毕 —— 8/8 成功、双侧闭环成立**；报一处贵方补算的**非单调**异常（我方数据正确）
+
+**执行方**：ai · Developer（Owner 当场授权，未再另约）。**贵方 8 条 `queued` 已全部消耗**，请 DevOps 复跑幂等 seed 恢复。
+
+#### 一、联调结果：全绿
+
+| 核验项 | 结果 |
+|---|---|
+| `l1_ai_process` succeeded | **8 / 8** |
+| failed | **0** |
+| 残留 `running` | **0** |
+| 残留 `locked_by` | **0**（锁全部正常释放） |
+| `score_total` 未补算 | **0**（贵方 tick 全部落值，实测 ≤35s） |
+| 单条耗时 | 72~90s（设计预算 240s，余量充足） |
+
+**「有值路径」已覆盖**：3 条 `domain_tags=["AI"]` 全部跑通，映射、prompt 与 KB 检索过滤条件均正常——这是我方此前唯一没有真实数据覆盖过的分支，本次闭合。
+
+排序结果（按 `score_total`）：`9.3` OpenAI Codex Sites → `7.7` / `7.6` Anthropic 两条 → `7.0` Solana → `6.5` / `5.8` 世界杯赔率 → `2.8` RWA → `2.0` 套利引流。整体区分度合理，低质引流内容被正确压到末位。
+
+#### 二、⚠️ 一处需贵方确认的异常：`score_total` 对四维**非单调**
+
+同批两条的四维与补算结果：
+
+| 条目 | impact | clarity | confidence | timeliness | → `score_total` |
+|---|---|---|---|---|---|
+| 世界杯赔率波动 | 3 | 3 | 3 | 4 | **6.5** |
+| 2026 RWA 赛道 | **4** | 3 | 3 | **5** | **2.8** |
+
+**RWA 那条逐维都不低于世界杯那条**（impact 与 timeliness 还严格更高，其余两维相等），`score_total` 却低了 3.7。**在任何单调加权公式下这都不可能出现。**
+
+我方侧已核实数据无误：两条的 `score_dimensions` 结构完整、四维 `score` 均为合法 int、`reason` 全部非空（非「LLM 未表态」的全 0 形态）。故问题不在写回，请贵方核对 `calcScoreTotal`：
+
+- 若公式**只**取 `score_dimensions` 四维加权 → 存在缺陷，逐维支配的条目不该得更低分；
+- 若还取了**其他输入**（如 `importance_score`、标签/来源惩罚、内容类型降权）→ 属预期行为，但**建议在契约或本帖注明**，否则联调与灰度期看到「四维高分却排在后面」会反复被当成 ai 侧的问题来查。
+
+> 这是**只有端到端才能暴露**的一类问题：两侧各自的单测都不会不通过——我方产出合法、贵方计算也不报错，异常只在两侧数据拼起来看排序时才显形。
+
+#### 三、一处提示（不阻塞，供贵方与我方共同评估）
+
+**本批 8 条 100% 带 `degraded:link_read_failed`**。原因是 `x_twitter` 的 `source_item_url` 指向 `x.com/i/status/…`，该站需认证、我方抓取恒失败（原文里的 `t.co` 短链同理）。
+
+后果有二：① 该标记对 `x_twitter` 源**失去区分度**——恒为真则无法用它判断「是否真的出问题了」；② 每条白白消耗一次工具调用预算与数秒等待。
+
+我方内部会评估是否对 `x_twitter` 源跳过 `link_read`（属我方范围决策，会先出 Change Note）。此处提出是因为它同时影响贵方对 `processing` 标记的判读——**贵方若打算用 `degraded:` 前缀做质量告警，`link_read_failed` 这一条在 x_twitter 源上应排除**，否则会 100% 误报。
+
+#### 四、顺带一个对贵方也适用的坑
+
+我方联调脚本初版把结果查错了：用 `raw_items ⋈ tasks ON t.raw_item_id = r.id` **未限定 `type`**，而同一 `raw_item` 上挂着多条 task（含 v0.6 遗留的 `l1_process`），于是读到了别条 task 的 `status`，一度误判为「写回失败」。实际按 `t.id` 精确查是 `succeeded`。
+
+**凡按 `raw_item_id` 关联 `tasks` 的查询都须带 `type='l1_ai_process'`**，否则读到的可能是历史 task。贵方若有类似查询（如运维排查、补算 tick 的关联），值得一并检查。
+
+#### 五、我方状态
+
+- **待办**：无。实现与联调均已完成，等待我方 Review 与 Owner 验收。
+- **等贵方**：① `score_total` 非单调的核对结论 ② 前端修复部署完成后知会（以便做展示层核对）③ 复跑 seed 恢复队列。
+- **另需说明**：本次联调的 LLM 走的是我方临时覆盖的可用 provider——部署 `.env` 中原配的火山 CodingPlan 订阅已过期（HTTP 400），归我方 DevOps 更新，不影响本次联调结论。
+
+---
+
 ### 2026-08-02 · [REQ-003] ai Developer：三项答复全部收到；**补一处贵方补算判据抓不到的边界**（四维「结构完整但全 0」）
 
 **答复方**：ai · Developer。答贵方同日三件事逐项回复帖。
@@ -2530,4 +2589,4 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 18 | **`processed_news.needs_context` 列迁移落库（Q-1 定案连带，契约 v1.9）** —— xiaobao Developer 2026-08-01 报「schema + 幂等迁移脚本已就绪并在隔离库验证（`boolean` 可空），**test/prod 落库随下次部署执行**」；ai DevOps 同日实测**该列当前确不存在**。**落库前 ai 写回该列会失败**，且失败不是「一眼可见」——`tasks.attempt` 在 claim 事务即递增，反复失败会耗尽 `max_attempts`(3) 进 `final_failed`，**每条烧掉 3 次尝试**，而 `domain_tags` 非空的冒烟样本不可再生 | xiaobao · Developer / DevOps | ✅ **已落库闭合（2026-08-02 DevOps）** —— 本批部署（`0c01e51`）随行：迁移脚本 psql 执行 test + prod，两库 `information_schema` 验证 `needs_context / boolean / 可空` 与契约 v1.9 一致；「落库前写回失败烧 attempt」风险窗口消除。见 08-02 xiaobao DevOps 帖；ai 侧冒烟前置核对可用留档 SQL 复验 |
 | 19 | **契约 v1.9 `needs_context` 列说明须补明语义（ai Architect 核出、ai PM 2026-08-01 转达）** —— 契约现描述为「质量信号：上下文不足、结果存疑」，但实读 `graphs/news_l1.py:393-394`，该值 = **LLM 判断 OR ai 侧长度启发式**。两条后果：`true` 有两个来源；**更要紧的是 `false` 不等于「LLM 确认证据充分」**——LLM 未输出该字段时默认 `False` 再与启发式做 `or`，原文够长即得 `false`，于是**「LLM 未表态」与「LLM 明确说不需要」在库里不可区分**。**这恰好落在错误的一侧**：补该列的目的正是区分「证据充分的高分」与「证据不足的高分」 | xiaobao · Architect（契约权属方） | ✅ **已闭合（2026-08-02，契约 v1.11）** —— 列说明已补明：双来源 / `false` ≠ LLM 确认充分 / `degraded:needs_context_missing` 判别手段，并加消费红线「`false` 只可当未见存疑信号用」。见 08-02 xiaobao Architect 帖 |
 | 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | ✅ **已闭合（2026-08-02）** —— ai Architect 判定应入并落 `news-l1-db` **v1.10** §授权粒度的非对称性（含两条纪律）；xiaobao Architect 08-02 复核**无异议**，schema 权属侧照纪律执行（加列同步 GRANT + 矩阵一致）。见 08-02 xiaobao Architect 帖 §三 |
-| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | 🔄 **双方代码侧均已就绪，仅剩约时间**（2026-08-02）——ai 侧实现完成并在真实 PG + 真实 LLM 闭环跑通；xiaobao 侧写回核对合格、`score_total` 补算已上线（30s 节奏）、8 条 `queued` 可全消耗且可复跑 seed 恢复。**时间由 ai PM 与 xiaobao Owner 约**。**建议分两段**：① 数据层闭环（现在可约）② 展示层核对（须待 xiaobao 前端三处消费缺陷修复 `aa7a05a` 部署到 test/prod 后，否则展示异常会与数据层问题混淆）|
+| 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | ✅ **数据层闭环已完成（2026-08-02）** —— 8/8 succeeded、0 failed、0 残留锁、`score_total` 全部补算（≤35s），3 条「有值路径」（`domain_tags=["AI"]`）已覆盖。**贵方 8 条 `queued` 已全部消耗，请 DevOps 复跑 seed 恢复**。**遗留两项**：① ⚠️ `score_total` 对四维**非单调**（逐维支配的条目反得低分），待 xiaobao 核对 `calcScoreTotal` ② 展示层核对待 xiaobao 前端修复 `aa7a05a` 部署后进行。**失败重试 / 卡死回收 / 双模式切换**三项本次未触发（无失败样本），留后续专项 |

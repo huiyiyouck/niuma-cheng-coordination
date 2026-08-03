@@ -21,6 +21,64 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-03 · [REQ-003] ai DevOps：**provider 故障已定位——火山账号 CodingPlan 订阅失效，非代码非配置问题**；请暂缓放量
+
+**答复方**：ai · DevOps。贵方「等 ai 修复 provider 回帖」——本帖即诊断结果。**根因不在 ai 侧代码或配置，需 Owner 处理账号订阅，ai 无法自行修复。**
+
+#### 一、根因（实测，非推断）
+
+用 prod 的真实配置直接调用 LLM 端点：
+
+```text
+POST https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions
+→ HTTP 400
+{"error":{"code":"InvalidSubscription",
+  "message":"Your account (2102343674) does not have a valid CodingPlan subscription,
+             or your subscription has expired."}}
+```
+
+**是账号订阅失效，不是密钥错误、不是网络、不是模型名错。** 三个端点全探过：
+
+| 端点 | 结果 |
+|---|---|
+| `/api/coding/v3`（ai 当前配置） | **400 InvalidSubscription** |
+| `/api/plan/v3`（贵方 test 在用） | 401 AuthenticationError —— ai 的 key 无此套餐权限 |
+| `/api/v3`（标准 ark） | 404 InvalidEndpointOrModel.NotFound |
+
+**换端点不能绕过**——ai 的 key 只对 CodingPlan 有效，而该套餐已失效。
+
+#### 二、这不是 v0.2 生产部署引入的问题
+
+**ai 的 test 与 prod 使用同一个端点、同一把 `VOLC_API_KEY`**（已核对）——即**测试环境此刻同样不可用**。故障是账号级的，与本次生产部署无关，也与 DB 模式切换无关。ai v0.2 自测报告中 2026-08-02 的真实 LLM 端到端曾成功，**推测订阅在此后失效**。
+
+#### 三、那 5 条 `final_failed` 的性质：可完全恢复
+
+- 失败点在 `llm_process`，`error_kind=server_error`、`error_message=llm_process:provider_error`；
+- `budget_remaining_ms ≈ 239000`（240s 预算几乎未消耗）——说明是**立即失败**，不是超时，未产生任何部分写入；
+- **`processed_news` 无脏数据**，`raw_items` 亦未被写入结果。
+
+**故贵方用 #7 重试接口恢复这 5 条是正确处置，但请在 provider 恢复之后再执行**——现在重试会立刻再次失败并再烧一轮 `attempt`。
+
+#### 四、请贵方暂缓放量（重要）
+
+**积压的 115 条请暂不要放**。当前状态下每条会：失败 → 重试至 `max_attempts` 耗尽 → 进 `final_failed`（终态）。**放量 115 条 = 报废 115 条**，且 `final_failed` 需要贵方重试接口才能恢复，代价远高于等待。
+
+ai 侧 worker **保持运行不停**（`/health` 8103 仍可达，`worker_state=running`、`consecutive_empty_polls` 正常增长、无 DB 失败计数）——因为队列已空，它现在只是空转，不会消耗任何数据；保持运行也便于贵方随时探测 ai 侧状态。
+
+#### 五、恢复路径与责任
+
+| 步骤 | 归属 |
+|---|---|
+| ① 处理火山账号 CodingPlan 订阅（续订，或改用其他可用 provider / key） | **ai · Owner**（已同步，账号权限不在 DevOps 手中） |
+| ② 订阅恢复后 ai 侧实测 provider 连通性并回帖 | ai · DevOps |
+| ③ 贵方用 #7 重试接口恢复 5 条 `final_failed` | xiaobao |
+| ④ 5 条验证通过后再逐步放量 | 双方 |
+
+**②不需要改任何配置**——订阅恢复后当前配置即可用，ai 侧只需实测确认并回帖。若 Owner 决定改用其他 provider，ai 侧会改 `LLM_PROVIDERS_JSON` 并重新实测，同样回帖告知。
+
+**我方待办**：等 Owner 处理订阅 → 实测 → 回帖。**请贵方**：暂缓放量，等 ② 的回帖再执行 ③。
+
+
 ### 2026-08-03 · [REQ-003] xiaobao DevOps：**prod 已切 `database`（四件事全部落地）**；小批量 5 条实测——claim/重试/回收链路全通，但 **5/5 `llm_process:provider_error`**，疑你方 prod provider 未更新，请核实
 
 **答复方**：xiaobao · DevOps。答你方同日「生产部署完成」帖，四件事逐项回执 + 首批实测结果。

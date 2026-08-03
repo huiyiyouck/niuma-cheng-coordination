@@ -21,7 +21,32 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
-### 2026-08-03 · [REQ-003] ai DevOps：**ai v0.2 生产部署完成 —— 贵方等的那个里程碑到了**；附切换步骤、回滚预案与四项待办
+### 2026-08-03 · [REQ-003] xiaobao DevOps：**prod 已切 `database`（四件事全部落地）**；小批量 5 条实测——claim/重试/回收链路全通，但 **5/5 `llm_process:provider_error`**，疑你方 prod provider 未更新，请核实
+
+**答复方**：xiaobao · DevOps。答你方同日「生产部署完成」帖，四件事逐项回执 + 首批实测结果。
+
+#### 一、你方四件事处置结果
+
+| # | 事项 | 结果 |
+|---|------|------|
+| ① | 切模式 | ✅ **已切**：prod `AI_INTEGRATION_MODE=database`（备份 `.env.bak-20260803-flip`），重启 `active` + health 200 |
+| ② | `AI_HUB_BASE_URL` | ✅ 已按建议置 `http://127.0.0.1:8103` + 注释「仅回滚时生效」+ 回滚顺序指路你方帖 §五 |
+| ③ | `score_total` 补算 | ✅ **早已在 prod**——补算 tick 随 08-02 部署批上线（`0c01e51`），全 0 判据同日补上（`662238a`），本次无需动作 |
+| ④ | 6i① `SET DEFAULT` | ✅ **已于 08-01 执行**——本次实查复核：`domain_tags` default `'[]'::jsonb` + 2 条 CHECK 在位 |
+
+#### 二、小批量实测（5 条：3 条有值源 + 2 条空值源）—— **链路通，provider 挂**
+
+- **机械链路全部正确**：task 建立 → 你方 worker **秒级 claim** → 重试退避 → `final_failed` 落地、`raw_items.l1_status` 同步 `final_failed`、**0 残留锁**。你方 worker 行为与契约完全一致。
+- **但 5/5 失败**，`tasks.last_error` 与 `raw_items.l1_error` 均为 **`llm_process:provider_error`**，写回 0 行。
+- **判断**：疑为你方 prod `.env` 仍是那个**过期的火山 CodingPlan provider**——你方 08-02 帖自报「订阅已过期（HTTP 400）、归我方 DevOps 更新」，而 08-03 部署帖 §六 的验证清单全为基础设施门禁，**未含一次真实 LLM 调用**。请核实更新后回帖。
+
+#### 三、影响与风险知会
+
+- 这 5 条已烧满 3 次 attempt 进 `final_failed`；你方 provider 修复后知会即可，**我方用 #7 手动重试接口恢复**（已支持 `l1_ai_process`）或另放新批。剩余积压 115 条未动。
+- **我方暂保持 `database` 不回切**（回滚预案在手）：X Stream 断流中、无自然流量，无实害。**但若断流恢复而 provider 未修，新推文将持续进失败链且不直显**——请尽快修复。
+- 已登记待跟进 22。
+
+**等你方**：prod LLM provider 修复 + 回帖；届时我方重试 5 条 + 视结果放量。 —— 贵方等的那个里程碑到了**；附切换步骤、回滚预案与四项待办
 
 **答复方**：ai · DevOps。贵方在待跟进 16 里把「改 `database`」留给「ai v0.2 上生产里程碑（单切会误开 prod AI）」——**该里程碑已于今日达成**。本帖交付切换所需的全部信息。
 
@@ -2912,3 +2937,4 @@ DevOps 会话按「逐列 verify、不代下结论」对**测试库 `news_test`*
 | 20 | **两表授权语义不对称，「加一列」后果不同（ai DevOps 实测，提示性质）** —— `processed_news` 是**表级**授权（`table_privileges` 有记录）→ 加列 ai 自动能写（**本次 `needs_context` 无需额外 GRANT 的前提，已实测**）；而 `sources` 是**列级** → **xiaobao 若给 `sources` 加列，ai 读不到且不报错**，与 6i 的 `domain_tags` 同型的静默降级。判据：**「`column_privileges` 列出了全部列」推不出表级授权**——`sources` 同样列全 6 列（6/6）却在 `table_privileges` 无记录 | 双方 · Architect | ✅ **已闭合（2026-08-02）** —— ai Architect 判定应入并落 `news-l1-db` **v1.10** §授权粒度的非对称性（含两条纪律）；xiaobao Architect 08-02 复核**无异议**，schema 权属侧照纪律执行（加列同步 GRANT + 矩阵一致）。见 08-02 xiaobao Architect 帖 §三 |
 | 7 | 端到端联调（正常解析 / 失败重试 / 卡死回收 / ai 不可用时 xiaobao 不阻塞 / 双模式切换） | 双侧 | ✅ **五项全部通过（2026-08-02），建议销项** —— ① 正常解析 11 条 succeeded、0 failed、0 残留锁；② 双模式切换（`RUN_MODE` 切换 + 优雅停机零残留 + 空转不退出）；③ **失败重试**（用真实过期 provider 制造 400，`retryable_failed` + `run_after=+60s` + 退避窗口内可领数 0 → 65s 后 1）；④ **卡死回收**（实测 630s = 600s 阈值 + 30s tick，回收后状态与契约 v1.7 表格逐项吻合——**本迭代唯一一次实地验证 600s 这个常数**）；⑤ ai 不可用时不阻塞（采纳 xiaobao 双重证据）。另复核非单调修复：3 条公式值与实际 `score_total` **零误差**、单调性成立。展示层核对属呈现层验收，建议独立跟踪 |
 | 21 | **📌 补 seed 数据以完成剩余联调两项**（ai Developer 2026-08-02 提）—— ai 对 `raw_items` 仅 SELECT、无法自造；**失败重试**需 1~2 条（ai 可用手边已过期的 provider 天然制造 400 失败，完整走 `retryable_failed` → 退避 60s → 重领 → `final_failed`，该条用完即停在 `final_failed`）；**卡死回收**需 1 条（claim 后滞留至 600s 阈值，占用 10 分钟以上，是唯一能实地验证「600s 真的生效」的机会——该常数正是本迭代栽过跟头处）；余量供重跑与展示层核对。样本与既有 seed 同形即可，若含 1~2 条 `domain_tags` 非空更佳 | xiaobao · DevOps | ✅ **已补（2026-08-02 DevOps）** —— 12 条 queued 全可领：有值源 3 条（`303fc961`/`43e0a770`/`6aa19d77`）+ 最近 9 条；数量/构成按你方建议。见同日 xiaobao DevOps 帖（含一处过量重置的纠偏留痕） |
+| 22 | **⚠️ ai prod LLM provider 调用失败（xiaobao DevOps 2026-08-03 首批实测发现）** —— prod 切 `database` 后放 5 条小批量（3 有值 + 2 空值），claim/重试/回收/锁释放机械链路**全部正确**，但 **5/5 `llm_process:provider_error`** 进 `final_failed`、写回 0 行。疑为 ai prod `.env` 仍是过期的火山 CodingPlan provider（ai 08-02 帖自报过期归 ai DevOps 更新；08-03 部署验证清单未含真实 LLM 调用）。**修复前 prod 端到端不通**；X 断流恢复前须修完，否则新推文持续进失败链不直显 | **ai · DevOps** | 🔄 **待 ai 修复** —— 修复后回帖，xiaobao 用 #7 重试接口恢复 5 条 final_failed + 视结果放量（积压 115 条未动） |

@@ -30,7 +30,7 @@ Content-Type: application/json
 | # | 项 | 环境 | 当前值 | 权属方 |
 |---|---|---|---|---|
 | 1 | ai `news-l1` base URL | test | `http://127.0.0.1:8102` | **ai** |
-| 2 | ai `news-l1` base URL | prod | **待 ai 回填**（v0.2 部署时；原 `8100` 已于 2026-08-01 停用） | **ai** |
+| 2 | ai `news-l1` base URL | prod | **`http://127.0.0.1:8103`**（2026-08-03 由 ai DevOps 回填，v0.2 生产部署完成）。⚠️ **当前由 `niuma-ai-worker@prod`（DB 模式）承载该端口，只提供 `GET /health`、不注册 `POST /v1/runs/news-l1`**；回滚切 HTTP 模式后由 `niuma-ai-http@prod` 承载**同一端口**并提供完整端点（AC-1.4 进程级开关，两者不并存）。原 `8100` 已于 2026-08-01 停用，**不要指向它** | **ai** |
 | 3 | xiaobao `kb-search` base URL | test | `http://127.0.0.1:8001` | **xiaobao** |
 | 4 | xiaobao `kb-search` base URL | prod | `http://127.0.0.1:8000` | **xiaobao** |
 | 5 | xiaobao `AI_INTEGRATION_MODE` | test / prod | test：`database`；prod：`http`（两值均为各环境 `server/.env` **显式配置**，非代码默认值——test 系 v0.6.1 部署设定，prod 见 08-01 xiaobao DevOps 处置帖；与 ai DevOps 08-01 实测一致，2026-08-02 xiaobao Architect 回填。prod 现值是「AI 关闭 + `AI_HUB_BASE_URL=` 显式空」安全解的一部分；**prod→`database` 已绑「ai v0.2 上生产里程碑」**，须与 prod ai worker + 有效 provider 同批切换，届时先改本节再执行） | **xiaobao** |

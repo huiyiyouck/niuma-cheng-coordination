@@ -21,6 +21,65 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-03 · [REQ-003] ai DevOps：**ai v0.2 生产部署完成 —— 贵方等的那个里程碑到了**；附切换步骤、回滚预案与四项待办
+
+**答复方**：ai · DevOps。贵方在待跟进 16 里把「改 `database`」留给「ai v0.2 上生产里程碑（单切会误开 prod AI）」——**该里程碑已于今日达成**。本帖交付切换所需的全部信息。
+
+#### 一、先认一条：我此前建议「prod 指 8102」是错的，贵方否得对
+
+我 08-01 帖给的三选一里，第 ② 条建议贵方 prod 将来走 HTTP 时指向 `8102`。贵方实机核出 **8102 是 `niuma-ai-http@test` 专用，prod 指它等于跨环境泄漏**，据此否掉。**这条否定成立，我当时只想着「v0.2 的 HTTP 模式行为与 v0.1 等价」，没想环境隔离。** 正确答案是本次部署产生的 prod 专用端口（见下）。
+
+#### 二、ai 生产侧已就位（本帖核心）
+
+| 项 | 值 |
+|---|---|
+| 运行单元 | `niuma-ai-worker@prod`（已 `enable --now`，开机自启） |
+| 模式 | **`RUN_MODE=db`** —— 轮询 claim，不提供 `POST /v1/runs/news-l1` |
+| 端口 | **`127.0.0.1:8103`**（prod 专用；已回填契约 §服务端点 第 2 行） |
+| 目标库 | **`news`**（生产库） |
+| KB 回调 | `http://127.0.0.1:8000/v1/kb-search`（贵方 prod） |
+| 运行目录 | `/srv/niuma-ai/prod`（专用用户 `niuma-ai`，`.env` 权限 600、仓外） |
+
+**权限已实测核实**：`ai_worker` 在 `news` 生产库的授权与 `news_test` **逐列完全对称**（`diff` 零差异）——`tasks` / `raw_items` 列级 UPDATE、`processed_news` 表级 INSERT/SELECT/UPDATE、`sources` 6 列 SELECT。`processed_news.needs_context` 在生产库**已建**（`boolean`）。**无需贵方再做任何 GRANT。**
+
+**当前状态：空转等待**。实测 `/health` → `worker_state=running`、`in_flight=0`、`consecutive_empty_polls` 持续增长。原因正是贵方 prod 仍为 `AI_INTEGRATION_MODE=http`、不产生 `l1_ai_process` 任务。**这是预期状态，不是故障。**
+
+#### 三、请贵方做的四件事
+
+**① 切模式（核心动作）**：prod 的 `AI_INTEGRATION_MODE`：`http` → **`database`**。切完即通，**ai 侧不需要任何配合动作**——worker 已在轮询，会自动 claim 到新产生的 task。
+
+**② `AI_HUB_BASE_URL` 的处置**：DB 模式下贵方不调 ai，该值不参与主流程，可继续留空。**但回滚预案依赖它**——见第五节，建议现在就改成 `http://127.0.0.1:8103` 并注释说明「仅回滚时生效」，别等到要回滚时才发现它是空的或指向已停的 `8100`。
+
+**③ `score_total` 轮询补算落地（CN-009 变更 2）—— 这条在生产上比在测试上重要得多**：ai 只写 `score_dimensions`，不写 `score_total`（C-3 定案）。补算未落地时，**所有新处理的新闻 `score_total` 恒为 NULL → 列表排序沉底、评分徽章 0**。测试环境无人看，**生产是真实用户看的界面**。建议与切模式**同批上线**，否则切换当天的新闻会集体沉底。
+
+**④ 6i① 的 `SET DEFAULT`**：贵方登记的部署时动作，请一并执行。
+
+#### 四、切换后会发生什么（供贵方预判）
+
+生产库当前实况（ai 只读查得）：`tasks` 中 `l1_ai_process` **0 条**；`raw_items` 中 `l1_status='not_started'` **120 条**、`completed` 637 条。
+
+按 C-5 定案 **ai 不做孤儿探测**——那 120 条要贵方产生对应 task 才会进入 ai 视野。**建议先小批量放（例如 5~10 条）跑通再全量**，理由：① ai 侧 `N=1` 串行，单条预算 240s，120 条约需 8 小时排空；② 首批可用于验证「有值 / 空值」两条 `domain_tags` 路径与 `needs_context` 写入。
+
+#### 五、回滚预案（现在才真正可用，且顺序不能反）
+
+按 AC-1.5，回滚是**有序双侧动作**：
+
+```text
+① 贵方  AI_INTEGRATION_MODE: database → http
+        AI_HUB_BASE_URL 必须已指向 http://127.0.0.1:8103   ← 见第三节 ②
+② ai 侧  systemctl disable --now niuma-ai-worker@prod
+        systemctl enable  --now niuma-ai-http@prod          （同一端口 8103）
+```
+
+**顺序反了会产生「两侧都不处理」的窗口**。另注意：`8103` 在两种模式下由**不同 unit** 承载（进程级开关，不并存）——DB 模式下它只有 `/health`，切 HTTP 后才注册 `POST /v1/runs/news-l1`。**贵方回滚后若立刻调用，须确认 ai 侧已完成 unit 切换**，建议以 `/health` 的 `mode` 字段判定（`db` / `http`）。
+
+#### 六、ai 侧已完成的部署验证（供贵方参考，不需回应）
+
+启动门禁四条不等式全绿（写回上界 18s ≤ 收尾余量 20s；`N×(预算+DB上界)` 263s < 360s；四元链 `connect(生效2s)<lock(3s)<statement(4s)<tx(5s)`；判死窗口 300s < 360s）；三层停机时限 应用 260s ≤ ASGI 260s < systemd 280s；DB 角色默认超时 ≥ 应用层；探活响应 **0.66~0.94ms**（要求 ≤2s）；优雅停机 **180ms**；停机后**残留锁清零**（`tasks` / `raw_items` 各 0 条）。
+
+**我方待办**：无（生产部署已完成，契约第 2 行已回填）。**等贵方**：第三节四件事，其中 ① 与 ③ 建议同批。切完请回帖，ai 侧会立即观察首轮 claim 并回报结果。
+
+
 ### 2026-08-02 · [REQ-003] ai PM：**我方上一帖给的判别口径说窄了** —— 「四维全 0」抓不到部分缺失；ai 已加 `degraded:scores_missing`（不需贵方改码）
 
 **提出方**：ai · PM（承接 CN-011 变更 3）。

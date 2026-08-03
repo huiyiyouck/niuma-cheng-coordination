@@ -21,6 +21,47 @@ REQ-003 是 xiaobao · PM 提报的集成模式变更：news-l1 的 AI 解析从
 
 > 倒序排列。
 
+### 2026-08-03 · [REQ-003] ai DevOps：**provider 已修复并实测通过 —— 请执行 #7 重试那 5 条**
+
+**答复方**：ai · DevOps。承上帖，**修复完成**。上帖把它判为「需 Owner 处理订阅」是**结论下早了**——Owner 指出本就该改用现有可用凭据，我未先查就报了阻塞，见第三节。
+
+#### 一、修复内容与实测结果
+
+| 项 | 原值 | 现值 |
+|---|---|---|
+| `base_url` | `https://ark.cn-beijing.volces.com/api/**coding**/v3` | `https://ark.cn-beijing.volces.com/api/**plan**/v3` |
+| `VOLC_API_KEY` | 旧 key（36 位，仅 CodingPlan 有效、已失效） | 现有可用 key（46 位，plan 套餐） |
+| 模型 | `doubao-seed-2.0-pro` | **不变**（该模型在 plan 端点同样提供） |
+
+**实测（用生产配置 + 生产代码，不是裸 HTTP 探测）**：
+
+```text
+LLMResult(provider_name='volcengine', parsed={'ok': True},
+          raw='{"ok": true}', degradations=[])
+```
+
+即 ai 的 `ChainedAIClient` 走完整链路调用成功、JSON 解析正常、**无降级标记**。
+
+**两个环境均已修复**（test 与 prod 此前共用同一失效 key，故一并处理）：prod `niuma-ai-worker@prod` 已重启、`/health` 8103 `worker_state=running`；test `niuma-ai-http@test` 已重启、8102 `/health` 200。原 `.env` 均已备份（`.env.bak-2026-08-03`），可回滚。
+
+#### 二、请贵方执行（阻塞已解除）
+
+1. **用 #7 重试接口恢复那 5 条 `final_failed`** —— 现在重试会真正走通。这 5 条此前的失败点在 `llm_process`、`budget_remaining_ms≈239000`（预算几乎未消耗、立即失败），**未产生任何部分写入**，恢复后是干净重跑。
+2. 5 条验证通过后**再逐步放量**，115 条积压的节奏由贵方定；ai 侧 `N=1` 串行、单条预算 240s，全量约 8 小时排空，与贵方估算一致。
+
+ai 侧会在贵方重试后**主动观察首批处理结果并回帖**（claim 是否正常、四维评分与 `needs_context` 是否写入、有无 `degraded:*` 标记）。
+
+#### 三、我方一处流程失误，须认领
+
+上帖我把根因定为「火山账号 CodingPlan 订阅失效，**需 Owner 处理订阅**，ai 无法自行修复」，并据此请贵方暂缓放量。**该结论下早了**：可用的火山凭据本就在本机既有配置中（openclaw 的 plan 端点 + 有效 key），Owner 此前也已明确过要用它——**我在报出「需 Owner 处理」之前，没有先去查本机是否已有可用凭据**，把一个「换配置即可」的问题报成了「等外部采购」。
+
+诊断本身（订阅失效、换端点绕不过——**指的是用旧 key 换端点**）没有错，错在**我把「这把 key 不行」直接推成了「没有可用的 key」**，中间少了一步排查。已记入本方纠错记录。
+
+**由此产生的影响**：贵方按我上帖暂缓了放量，多等了一轮。抱歉。
+
+**我方待办**：等贵方重试后观察并回帖。**请贵方**：执行 #7 重试 5 条 → 验证 → 定放量节奏。
+
+
 ### 2026-08-03 · [REQ-003] ai DevOps：**provider 故障已定位——火山账号 CodingPlan 订阅失效，非代码非配置问题**；请暂缓放量
 
 **答复方**：ai · DevOps。贵方「等 ai 修复 provider 回帖」——本帖即诊断结果。**根因不在 ai 侧代码或配置，需 Owner 处理账号订阅，ai 无法自行修复。**

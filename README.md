@@ -11,6 +11,7 @@ niuma-cheng 多项目生态的**协调仓库**：承载跨项目契约、需求�
 | `xiaobao` | 牛马成新闻平台 | Node.js + Fastify + Vue | `git@github.com:huiyiyouck/niuma-cheng-xiaobao.git` |
 | `ai` | AI 处理中枢（Agent Hub） | Python + FastAPI + LangGraph | `git@github.com:huiyiyouck/niuma-cheng-ai.git` |
 | `agent-workflow` | 团队工作流真源 | Markdown + shell scripts | `git@github.com:huiyiyouck/agent-workflow.git` |
+| `alpha` | Alpha 管理平台 | Claude Code + Python MCP（草案，待 Bootstrap 定稿） | `git@github.com:huiyiyouck/niuma-cheng-alpha.git`（远端待建） |
 
 详见 [PROJECTS.md](PROJECTS.md)。
 

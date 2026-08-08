@@ -43,6 +43,20 @@
 | 关联项目 | `xiaobao`、`ai`、`workboard` 等已接入 agent-workflow 的项目 |
 | 沟通文档 | 无固定 communications；基线修正提案见 [REQUESTS.md#基线修正提案池](REQUESTS.md#基线修正提案池) |
 
+## alpha — Alpha 管理平台
+
+| 字段 | 内容 |
+|------|------|
+| 项目 id | `alpha` |
+| 名称 | Alpha 管理平台 |
+| 技术栈 | Claude Code + Python MCP（`cnhkmcp`/brain-mcp）（**草案**，待 Bootstrap 定稿） |
+| 仓库 | `git@github.com:huiyiyouck/niuma-cheng-alpha.git`（本地 `~/Project/niuma-cheng/niuma-cheng-alpha`；**远端待 Owner 建仓后首推**） |
+| 定位 | 把 WorldQuant BRAIN「AI 打工人」Demo（Claude Code + brain-mcp 量化研究助手）改造为服务器上自启、可复用、可进化的 Alpha 研究管理平台：项目级隔离、一键启动、研究流程模板化、可分发（**立项受理草案**，待项目组 Bootstrap 定稿） |
+| 职责边界 | 待 Bootstrap 定稿 |
+| 当前入口 | 项目内 `README.md`（已铺 agent-workflow 框架，待 Bootstrap 建 `docs/progress/`） |
+| 关联项目 | 暂无 |
+| 沟通文档 | 无 |
+
 ## workboard — 项目管理工作台
 
 | 字段 | 内容 |

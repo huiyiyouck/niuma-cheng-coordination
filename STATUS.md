@@ -12,6 +12,7 @@
 | `xiaobao` | v0.6 已上线；v0.6.1 实现 R1（设计文档已定稿，PM/Developer/DevOps R2 全部通过） | 项目 `docs/progress/INDEX.md` | REQ-003 数据库边界契约已出稿，**ai 侧已于 2026-07-25 承接**（转 ai v0.2 主线）；`score_total` 冲突已定案（契约订正 v1.1）；**REQ-003 全部就绪项已交付 ai 侧（2026-07-25）**，仅待答复 rss/jin10_flash 是否接入真实源；生产库 GRANT 待 ai 上生产前执行；生产 AI 处理默认关闭（X 直显） |
 | `ai` | v0.1 已关闭（2026-07-04，REQ-001 news-l1 真实化交付）；**v0.2 进行中 — PRD 阶段 R3 待三方复审、无阻塞定稿项**（2026-07-25 范围重排主线为 REQ-003；2026-07-26 按 Owner 核心原则「基础夯实优先」将 async 地基改造纳入范围；2026-07-27 按 xiaobao 三方答复收敛至 R3）；已接入团队工作流；PM（ck）已承接 REQ-001、REQ-002、REQ-003；定位为生态内部通用 AI 处理中枢（[decisions/0002](decisions/0002-ai-hub-ecosystem-positioning.md)） | 项目 `docs/progress/INDEX.md` | REQ-003 已承接（2026-07-25）；**O-1、DB 联调前置、4 条阻塞契约缺项均已闭合**（契约 v1.3 + 3 列 GRANT 双库）；PRD R3 待三方复审；剩余 C-6 待 ai 实证、Q-1 待 xiaobao PM 表态，均不阻塞；v0.2 顺延项：托管化 / 工具并发 / RunRecord / 多 provider 生产验证 → v0.3；KB 空结果语义已并入 v0.2 |
 | `workboard` | v0.2 已上线（2026-07-07，读写工作台 5 视图）；v0.3 进行中（设计已定稿 2026-07-18，进实现阶段） | 项目 `docs/progress/INDEX.md` | 本行为补登：workboard 立项（2026-06-17）早于「立项登记三处」规则，状态表历史缺行，参谋长 2026-07-18 补齐 |
+| `alpha` | 已立项建壳（2026-08-08），待 Bootstrap 与定位定稿 | 项目 `README.md` | Alpha 管理平台（WorldQuant BRAIN「AI 打工人」Demo 改造）；调研原始材料已入库项目 `docs/research/`；**远端仓库待 Owner 在 GitHub 建 `niuma-cheng-alpha` 空仓后由参谋长首推** |
 
 ## 跨项目阻塞与谁等谁
 

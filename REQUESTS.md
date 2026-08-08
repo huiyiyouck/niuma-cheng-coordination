@@ -14,7 +14,7 @@
 | REQ-001 | xiaobao · Developer | 新闻 L1 处理：四维原始评分 + 五类标签 + 摘要 + 翻译 + 按需工具调用 | ai · PM（ck） | ai v0.1（已关闭，2026-07-04） | 已关闭 | [communications/REQ-001-news-l1.md](communications/REQ-001-news-l1.md) |
 | REQ-002 | xiaobao · Architect | AI 处理架构调研：从 Horizon / ai-news-aggregator 两个参考项目提炼 L0/L1 与 Agent Hub 设计输入，回答 4 个架构岔路口 | ai · PM（ck）承接登记，产出归 Architect | ai v0.1（前置，已完成并随 v0.1 关闭） | 已关闭（2026-06-29 调研完成，2026-07-25 销账） | [communications/REQ-002-arch-research.md](communications/REQ-002-arch-research.md) |
 | REQ-003 | xiaobao · PM | v0.6.1 集成模式变更：news-l1 AI 解析从 HTTP 同步调用改为数据库契约边界异步解耦（ai 改轮询 worker 模式 + 适配层封装），翻译保留在 ai 侧 | ai · PM（ck），2026-07-25 承接 | ai v0.2（主线，PRD R1 待三方 Review） | 开发中（转入迭代）；O-1 P0 已回应关闭（2026-07-25 xiaobao·PM 定案方案 A，契约订正 v1.1）+ O-5/R-5 已交付；余 R-1~R-4 待 xiaobao DevOps / Owner（见沟通文档待跟进表） | [communications/REQ-003-db-boundary-async.md](communications/REQ-003-db-boundary-async.md)（契约：[contracts/news-l1-db.md](contracts/news-l1-db.md)） |
-| REQ-004 | 参谋长（Owner 授权代提，2026-07-18） | 跨项目「在途未响应项」高亮：把台账未同步行、超期无响应的 REQ/BCR 在看板显式高亮/置顶，让 Owner 日常可见，不依赖有人恰好开对会话 | 待 workboard · PM 评估承接 | — | 已提报（2026-07-18） | 待承接后建立 |
+| REQ-004 | 参谋长（Owner 授权代提，2026-07-18） | 跨项目「在途未响应项」高亮：把台账未同步行、超期无响应的 REQ/BCR 在看板显式高亮/置顶，让 Owner 日常可见，不依赖有人恰好开对会话 | **workboard · PM（指挥官直接指派，2026-08-08）** | 待 workboard PM 定（建议 v0.3 或 v0.4） | **已承接**（指挥官指派，2026-08-08） | 待承接方建立 |
 
 ---
 
@@ -81,7 +81,11 @@
   3. 展示位置由 PM 定（建议放 Owner 日常必看的首屏/跨项目视图）。
 - 理由：workboard 是 Owner 日常查看的聚合面板，把「该捞没捞」的信号推到眼前，是机制护栏而非新增条文；与参谋长定时巡检（另行落地）互补。
 - 边界：workboard 仍不回写被监控仓；本需求是纯读取+展示层增强。
-- 当前状态：已提报，待 workboard · PM 评估承接（可排 v0.3 或 v0.4）。
+- 当前状态：**已承接 —— 指挥官 2026-08-08 直接指派 workboard 承接**（依 `cross-project-collaboration.md`「Owner 可直接指派承接项目」）。请 workboard · PM 排期（建议 v0.3 或 v0.4）、定义细节并建立沟通文档。
+
+- **指派缘由（本条自身即最新实例）**：本 REQ 于 2026-07-18 提报后，**在池中停留 21 天无人评估承接**，直到 2026-08-08 指挥官在盘点卡点时主动追问才被捞出。**这正是本 REQ 要解决的失效模式在它自己身上的复现**——提报侧有人做、响应侧无节拍，全靠「恰好有人开对会话」。原背景所举三例（台账积压 11 天 / REQ-003 无承接 13 天 / BCR-014 未评估 5 天）中最长的是 13 天，本条 21 天已刷新记录。故不再走「PM 评估是否承接」，由指挥官直接指派。
+
+> **写入声明（可审计）**：本条 REQ 的承接登记由**参谋长代录**。按参谋长白名单，「承接/拒绝普通 REQ」在黑名单内——本次写入依据是**指挥官 2026-08-08 会话中明确指示「按照你推荐的来」**（推荐内容 = 直接指派 workboard 承接）。**决策方是指挥官，参谋长只做文书落盘，不构成参谋长承接权先例**；后续 REQ 承接仍按原规则由目标项目 PM/Architect 或指挥官指派。
 
 ---
 
